@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Users, MessageSquare, CalendarDays,
-  Activity, Zap, Layers, Settings, Bot,
+  Activity, Zap, Layers, Settings, Bot, X,
 } from 'lucide-react'
 
 const navItems = [
@@ -14,12 +14,17 @@ const navItems = [
   { to: '/automations', icon: Zap, label: 'Automations' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   return (
-    <div className="w-60 bg-slate-900 flex flex-col h-full flex-shrink-0">
-      <div className="px-5 py-5 border-b border-slate-800">
+    <aside className={`
+      fixed md:static inset-y-0 left-0 z-30
+      w-60 bg-slate-900 flex flex-col h-full flex-shrink-0
+      transform transition-transform duration-200 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+    `}>
+      <div className="px-5 py-5 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg">
+          <div className="w-9 h-9 bg-blue-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
             <Bot size={18} className="text-white" />
           </div>
           <div>
@@ -27,6 +32,12 @@ export default function Sidebar() {
             <div className="text-slate-400 text-xs">Aniya Networks</div>
           </div>
         </div>
+        <button
+          onClick={onClose}
+          className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -34,6 +45,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
@@ -51,6 +63,7 @@ export default function Sidebar() {
       <div className="px-3 pb-4 border-t border-slate-800 pt-3">
         <NavLink
           to="/settings"
+          onClick={onClose}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all duration-150"
         >
           <Settings size={17} />
@@ -66,6 +79,6 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
-    </div>
+    </aside>
   )
 }
