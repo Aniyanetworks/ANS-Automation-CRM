@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   session_id TEXT UNIQUE,
   name TEXT,
   email TEXT,
-  phone TEXT,
+  phone TEXT UNIQUE,
   message TEXT,
   service_type TEXT,
   interest TEXT DEFAULT 'Pending',
