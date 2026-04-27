@@ -131,11 +131,26 @@ export async function getWorkflowExecutions() {
   return data
 }
 
+// ─── SEARCH SUGGESTIONS ──────────────────────────────────────────────────────
+
+export async function searchContacts(query) {
+  if (!query || query.trim().length < 2) return []
+  const q = query.trim()
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('id, name, email, phone, lead_status, source, avatar, avatar_color')
+    .or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,service_type.ilike.%${q}%`)
+    .order('last_action_date', { ascending: false })
+    .limit(6)
+  if (error) return []
+  return data
+}
+
 // ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
 
 export async function getDashboardStats() {
   const [contactsRes, followupsRes, executionsRes] = await Promise.all([
-    supabase.from('contacts').select('lead_status, interest, created_at, source'),
+    supabase.from('contacts').select('*'),
     supabase.from('followups').select('status, follow_up_date'),
     supabase.from('workflow_executions').select('status, automation, timestamp'),
   ])
@@ -153,8 +168,10 @@ export async function getDashboardStats() {
   return {
     totalLeads: contacts.length,
     newLeads: contacts.filter(c => c.lead_status === 'New Lead').length,
+    contacted: contacts.filter(c => c.lead_status === 'Contacted').length,
     hotLeads: contacts.filter(c => c.lead_status === 'Hot Lead').length,
     qualifiedLeads: contacts.filter(c => c.lead_status === 'Qualified Lead').length,
+    proposalSent: contacts.filter(c => c.lead_status === 'Proposal Sent').length,
     closedWon: contacts.filter(c => c.lead_status === 'Closed Won').length,
     closedLost: contacts.filter(c => c.lead_status === 'Closed Lost').length,
     pendingFollowups: followups.filter(f => f.status === 'Pending').length,
@@ -166,8 +183,8 @@ export async function getDashboardStats() {
       if (c.source) acc[c.source] = (acc[c.source] || 0) + 1
       return acc
     }, {}),
-    recentContacts: contacts
+    recentContacts: [...contacts]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 5),
+      .slice(0, 6),
   }
 }

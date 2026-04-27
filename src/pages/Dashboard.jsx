@@ -85,9 +85,9 @@ export default function Dashboard() {
 
   const pipelineCounts = {
     'New Lead': stats.newLeads,
-    'Contacted': stats.totalLeads - stats.newLeads - stats.hotLeads - stats.qualifiedLeads - stats.closedWon - stats.closedLost,
+    'Contacted': stats.contacted,
     'Hot/Qualified': stats.hotLeads + stats.qualifiedLeads,
-    'Proposal': 0,
+    'Proposal': stats.proposalSent,
     'Won': stats.closedWon,
     'Lost': stats.closedLost,
   }

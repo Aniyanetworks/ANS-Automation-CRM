@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2 } from 'lucide-react'
 import { getContacts, updateContact, createContact, deleteContact } from '../services/api'
 
@@ -348,6 +349,9 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
 }
 
 export default function Contacts() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
   const [contacts, setContacts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -361,9 +365,33 @@ export default function Contacts() {
   const [sortKey, setSortKey] = useState('last_action_date')
   const [sortDir, setSortDir] = useState('desc')
 
+  // Handle navigation state from Header (Add Contact button, search, or suggestion click)
+  const pendingContactId = useRef(null)
+  useEffect(() => {
+    if (location.state?.openCreate) {
+      setCreating(true)
+      navigate('/contacts', { replace: true, state: {} })
+    }
+    if (location.state?.searchQuery) {
+      setSearch(location.state.searchQuery)
+      navigate('/contacts', { replace: true, state: {} })
+    }
+    if (location.state?.openContact) {
+      pendingContactId.current = location.state.openContact
+      navigate('/contacts', { replace: true, state: {} })
+    }
+  }, [location.state])
+
   useEffect(() => {
     getContacts()
-      .then(setContacts)
+      .then(data => {
+        setContacts(data)
+        if (pendingContactId.current) {
+          const found = data.find(c => c.id === pendingContactId.current)
+          if (found) setSelected(found)
+          pendingContactId.current = null
+        }
+      })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
