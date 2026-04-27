@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { CalendarDays, Plus, X, CheckCircle, Clock, AlertCircle } from 'lucide-react'
-import { followups as initialFollowups, contacts } from '../data/mockData'
+import { useState, useEffect } from 'react'
+import { CalendarDays, Plus, X, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react'
+import { getFollowups, updateFollowupStatus, createFollowup, getContacts } from '../services/api'
 
 const sourceColors = {
   Website: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -19,21 +19,50 @@ const statusConfig = {
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
 
-function AddModal({ onClose, onAdd }) {
-  const [form, setForm] = useState({ contactId: '', followUpDate: '', message: '', status: 'Pending' })
-  function submit(e) {
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+}
+
+function getAvatarColor(name) {
+  const colors = ['bg-rose-500', 'bg-blue-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-orange-500', 'bg-teal-500', 'bg-indigo-500']
+  return colors[(name || '').charCodeAt(0) % colors.length]
+}
+
+function resolveStatus(f) {
+  if (f.status === 'Done') return 'Done'
+  const today = new Date().toISOString().split('T')[0]
+  if (f.follow_up_date && f.follow_up_date < today) return 'Overdue'
+  return 'Pending'
+}
+
+function AddModal({ contacts, onClose, onAdd }) {
+  const [form, setForm] = useState({ contact_id: '', follow_up_date: '', message: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function submit(e) {
     e.preventDefault()
-    const contact = contacts.find(c => c.id === form.contactId)
-    if (!contact || !form.followUpDate || !form.message) return
-    onAdd({
-      id: 'fu_new_' + Date.now(),
-      ...form,
-      contactName: contact.name,
-      source: contact.source,
-      createdAt: new Date().toISOString(),
-    })
-    onClose()
+    const contact = contacts.find(c => c.id === form.contact_id)
+    if (!contact || !form.follow_up_date || !form.message) return
+    setSaving(true)
+    try {
+      const created = await createFollowup({
+        contact_id: contact.id,
+        contact_name: contact.name,
+        source: contact.source,
+        follow_up_date: form.follow_up_date,
+        message: form.message,
+        status: 'Pending',
+      })
+      onAdd(created)
+      onClose()
+    } catch (err) {
+      alert('Failed to create follow-up: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
   }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -47,14 +76,14 @@ function AddModal({ onClose, onAdd }) {
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Contact</label>
             <select
-              value={form.contactId}
-              onChange={e => setForm(f => ({ ...f, contactId: e.target.value }))}
+              value={form.contact_id}
+              onChange={e => setForm(f => ({ ...f, contact_id: e.target.value }))}
               required
               className={inputCls}
             >
               <option value="">Select a contact...</option>
               {contacts.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.source})</option>
+                <option key={c.id} value={c.id}>{c.name} ({c.source || 'Unknown'})</option>
               ))}
             </select>
           </div>
@@ -62,8 +91,8 @@ function AddModal({ onClose, onAdd }) {
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Follow-up Date</label>
             <input
               type="date"
-              value={form.followUpDate}
-              onChange={e => setForm(f => ({ ...f, followUpDate: e.target.value }))}
+              value={form.follow_up_date}
+              onChange={e => setForm(f => ({ ...f, follow_up_date: e.target.value }))}
               required
               className={inputCls}
             />
@@ -80,7 +109,8 @@ function AddModal({ onClose, onAdd }) {
             />
           </div>
           <div className="flex gap-2 pt-2">
-            <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+            <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {saving && <Loader2 size={14} className="animate-spin" />}
               Add Follow-up
             </button>
             <button type="button" onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -94,25 +124,48 @@ function AddModal({ onClose, onAdd }) {
 }
 
 export default function Followups() {
-  const [items, setItems] = useState(initialFollowups)
+  const [items, setItems] = useState([])
+  const [contacts, setContacts] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('All')
   const [showModal, setShowModal] = useState(false)
 
-  const pending = items.filter(f => f.status === 'Pending').length
-  const overdue = items.filter(f => f.status === 'Overdue').length
-  const done = items.filter(f => f.status === 'Done').length
+  useEffect(() => {
+    Promise.all([getFollowups(), getContacts()])
+      .then(([fus, cts]) => { setItems(fus); setContacts(cts) })
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
-  const filtered = filter === 'All' ? items : items.filter(f => f.status === filter)
-
-  function markDone(id) {
-    setItems(prev => prev.map(f => f.id === id ? { ...f, status: 'Done' } : f))
+  async function markDone(id) {
+    try {
+      const updated = await updateFollowupStatus(id, 'Done')
+      setItems(prev => prev.map(f => f.id === id ? updated : f))
+    } catch (err) {
+      alert('Failed to update: ' + err.message)
+    }
   }
+
+  // Resolve overdue status dynamically on render
+  const resolvedItems = items.map(f => ({ ...f, status: resolveStatus(f) }))
+
+  const pending = resolvedItems.filter(f => f.status === 'Pending').length
+  const overdue = resolvedItems.filter(f => f.status === 'Overdue').length
+  const done = resolvedItems.filter(f => f.status === 'Done').length
+
+  const filtered = filter === 'All' ? resolvedItems : resolvedItems.filter(f => f.status === filter)
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64 text-slate-400">
+      <Loader2 size={28} className="animate-spin mr-2" /> Loading follow-ups...
+    </div>
+  )
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'All Follow-ups', count: items.length, color: 'bg-slate-900 dark:bg-slate-700', click: 'All' },
+          { label: 'All Follow-ups', count: resolvedItems.length, color: 'bg-slate-900 dark:bg-slate-700', click: 'All' },
           { label: 'Pending', count: pending, color: 'bg-amber-500', click: 'Pending' },
           { label: 'Overdue', count: overdue, color: 'bg-red-500', click: 'Overdue' },
           { label: 'Completed', count: done, color: 'bg-emerald-500', click: 'Done' },
@@ -155,11 +208,13 @@ export default function Followups() {
 
       <div className="space-y-2">
         {filtered.map(f => {
-          const cfg = statusConfig[f.status]
+          const cfg = statusConfig[f.status] || statusConfig.Pending
           const StatusIcon = cfg.icon
-          const contact = contacts.find(c => c.id === f.contactId)
+          const contact = contacts.find(c => c.id === f.contact_id)
           const isOverdue = f.status === 'Overdue'
           const isPending = f.status === 'Pending'
+          const initials = contact ? (contact.avatar || getInitials(contact.name)) : getInitials(f.contact_name)
+          const avatarColor = contact ? (contact.avatar_color || getAvatarColor(contact.name)) : getAvatarColor(f.contact_name)
 
           return (
             <div key={f.id} className={`bg-white dark:bg-slate-800 rounded-xl border shadow-sm px-4 md:px-5 py-4 flex items-start gap-4 transition-all hover:shadow-md ${isOverdue ? 'border-red-200 dark:border-red-800' : 'border-slate-200 dark:border-slate-700'}`}>
@@ -169,15 +224,15 @@ export default function Followups() {
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {contact && (
-                        <div className={`w-7 h-7 rounded-full ${contact.avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
-                          {contact.avatar}
-                        </div>
+                      <div className={`w-7 h-7 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                        {initials}
+                      </div>
+                      <span className="font-semibold text-slate-900 dark:text-white">{f.contact_name}</span>
+                      {f.source && (
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[f.source] || 'bg-slate-100 text-slate-600'}`}>
+                          {sourceIcons[f.source]} {f.source}
+                        </span>
                       )}
-                      <span className="font-semibold text-slate-900 dark:text-white">{f.contactName}</span>
-                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[f.source]}`}>
-                        {sourceIcons[f.source]} {f.source}
-                      </span>
                     </div>
                     <p className="text-sm text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">{f.message}</p>
                   </div>
@@ -194,14 +249,14 @@ export default function Followups() {
                   <div className="flex items-center gap-1">
                     <CalendarDays size={12} />
                     <span className={isOverdue ? 'text-red-500 font-medium' : ''}>
-                      {new Date(f.followUpDate).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {f.follow_up_date ? new Date(f.follow_up_date + 'T00:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : '—'}
                     </span>
                   </div>
-                  <span>Created {new Date(f.createdAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</span>
+                  <span>Created {f.created_at ? new Date(f.created_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}</span>
                 </div>
               </div>
 
-              {isPending && (
+              {(isPending || isOverdue) && (
                 <button
                   onClick={() => markDone(f.id)}
                   className="flex-shrink-0 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors"
@@ -222,7 +277,11 @@ export default function Followups() {
       </div>
 
       {showModal && (
-        <AddModal onClose={() => setShowModal(false)} onAdd={item => setItems(prev => [item, ...prev])} />
+        <AddModal
+          contacts={contacts}
+          onClose={() => setShowModal(false)}
+          onAdd={item => setItems(prev => [item, ...prev])}
+        />
       )}
     </div>
   )

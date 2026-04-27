@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { ChevronRight, ChevronLeft, Phone, Mail } from 'lucide-react'
-import { contacts, pipelineStages } from '../data/mockData'
+import { useState, useEffect } from 'react'
+import { ChevronRight, ChevronLeft, Phone, Mail, Loader2 } from 'lucide-react'
+import { getContacts, updateContact } from '../services/api'
+
+const pipelineStages = ['New Lead', 'Contacted', 'Interested', 'Proposal Sent', 'Closed Won', 'Closed Lost']
 
 const stageColors = {
   'New Lead': 'border-t-slate-400',
@@ -10,7 +12,6 @@ const stageColors = {
   'Closed Won': 'border-t-emerald-500',
   'Closed Lost': 'border-t-red-400',
 }
-
 const stageBg = {
   'New Lead': 'bg-slate-50 dark:bg-slate-700/50',
   'Contacted': 'bg-blue-50/50 dark:bg-blue-900/20',
@@ -19,7 +20,6 @@ const stageBg = {
   'Closed Won': 'bg-emerald-50/50 dark:bg-emerald-900/20',
   'Closed Lost': 'bg-red-50/30 dark:bg-red-900/10',
 }
-
 const stageHeaderColor = {
   'New Lead': 'text-slate-600 dark:text-slate-300',
   'Contacted': 'text-blue-700 dark:text-blue-400',
@@ -28,17 +28,14 @@ const stageHeaderColor = {
   'Closed Won': 'text-emerald-700 dark:text-emerald-400',
   'Closed Lost': 'text-red-600 dark:text-red-400',
 }
-
-function getStageForContact(contact) {
-  if (contact.leadStatus === 'New Lead') return 'New Lead'
-  if (contact.leadStatus === 'Contacted') return 'Contacted'
-  if (contact.leadStatus === 'Hot Lead' || contact.leadStatus === 'Qualified Lead') return 'Interested'
-  if (contact.leadStatus === 'Proposal Sent') return 'Proposal Sent'
-  if (contact.leadStatus === 'Closed Won') return 'Closed Won'
-  if (contact.leadStatus === 'Closed Lost') return 'Closed Lost'
-  return 'New Lead'
+const stageBarColors = {
+  'New Lead': 'bg-slate-400',
+  'Contacted': 'bg-blue-400',
+  'Interested': 'bg-orange-400',
+  'Proposal Sent': 'bg-purple-400',
+  'Closed Won': 'bg-emerald-500',
+  'Closed Lost': 'bg-red-400',
 }
-
 const sourceColors = {
   Website: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   Facebook: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
@@ -47,41 +44,93 @@ const sourceColors = {
   SMS: 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
 }
 const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬' }
-
 const interestColors = {
   Yes: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   No: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
   Pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
 }
 
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+}
+function getAvatarColor(name) {
+  const colors = ['bg-rose-500', 'bg-blue-500', 'bg-violet-500', 'bg-emerald-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-orange-500', 'bg-teal-500', 'bg-indigo-500']
+  return colors[(name || '').charCodeAt(0) % colors.length]
+}
+
+// Maps lead_status from DB to pipeline stage column
+function getStage(contact) {
+  const s = contact.lead_status
+  if (s === 'New Lead') return 'New Lead'
+  if (s === 'Contacted') return 'Contacted'
+  if (s === 'Hot Lead' || s === 'Qualified Lead') return 'Interested'
+  if (s === 'Proposal Sent') return 'Proposal Sent'
+  if (s === 'Closed Won') return 'Closed Won'
+  if (s === 'Closed Lost') return 'Closed Lost'
+  return 'New Lead'
+}
+
+// Maps pipeline stage back to lead_status for DB save
+const stageToStatus = {
+  'New Lead': 'New Lead',
+  'Contacted': 'Contacted',
+  'Interested': 'Hot Lead',
+  'Proposal Sent': 'Proposal Sent',
+  'Closed Won': 'Closed Won',
+  'Closed Lost': 'Closed Lost',
+}
+
 export default function Pipelines() {
   const [stageData, setStageData] = useState(() => {
     const map = {}
     pipelineStages.forEach(s => { map[s] = [] })
-    contacts.forEach(c => {
-      const stage = getStageForContact(c)
-      map[stage].push({ ...c })
-    })
     return map
   })
+  const [loading, setLoading] = useState(true)
 
-  function moveContact(contactId, fromStage, direction) {
+  useEffect(() => {
+    getContacts().then(data => {
+      const map = {}
+      pipelineStages.forEach(s => { map[s] = [] })
+      data.forEach(c => {
+        const stage = getStage(c)
+        map[stage].push(c)
+      })
+      setStageData(map)
+    }).catch(console.error).finally(() => setLoading(false))
+  }, [])
+
+  async function moveContact(contactId, fromStage, direction) {
     const fromIdx = pipelineStages.indexOf(fromStage)
     const toIdx = direction === 'forward' ? fromIdx + 1 : fromIdx - 1
     if (toIdx < 0 || toIdx >= pipelineStages.length) return
     const toStage = pipelineStages[toIdx]
+
     setStageData(prev => {
       const contact = prev[fromStage].find(c => c.id === contactId)
       return {
         ...prev,
         [fromStage]: prev[fromStage].filter(c => c.id !== contactId),
-        [toStage]: [...prev[toStage], contact],
+        [toStage]: [...prev[toStage], { ...contact, lead_status: stageToStatus[toStage] }],
       }
     })
+
+    try {
+      await updateContact(contactId, { lead_status: stageToStatus[toStage] })
+    } catch (err) {
+      console.error('Failed to update lead status:', err)
+    }
   }
 
   const totalValue = Object.values(stageData).flat().length
   const wonCount = stageData['Closed Won']?.length || 0
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64 text-slate-400">
+      <Loader2 size={28} className="animate-spin mr-2" /> Loading pipeline...
+    </div>
+  )
 
   return (
     <div className="space-y-4">
@@ -105,15 +154,9 @@ export default function Pipelines() {
             {pipelineStages.map(stage => {
               const count = stageData[stage]?.length || 0
               const pct = totalValue ? (count / totalValue) * 100 : 0
-              const colors = {
-                'New Lead': 'bg-slate-400',
-                'Contacted': 'bg-blue-400',
-                'Interested': 'bg-orange-400',
-                'Proposal Sent': 'bg-purple-400',
-                'Closed Won': 'bg-emerald-500',
-                'Closed Lost': 'bg-red-400',
-              }
-              return pct > 0 ? <div key={stage} className={`${colors[stage]} h-full`} style={{ width: `${pct}%` }} title={`${stage}: ${count}`} /> : null
+              return pct > 0 ? (
+                <div key={stage} className={`${stageBarColors[stage]} h-full`} style={{ width: `${pct}%` }} title={`${stage}: ${count}`} />
+              ) : null
             })}
           </div>
         </div>
@@ -135,54 +178,62 @@ export default function Pipelines() {
                 </div>
 
                 <div className="p-2 space-y-2 min-h-32 max-h-[calc(100vh-18rem)] overflow-y-auto">
-                  {cards.map(c => (
-                    <div key={c.id} className="bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow group">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-7 h-7 rounded-full ${c.avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
-                          {c.avatar}
+                  {cards.map(c => {
+                    const initials = c.avatar || getInitials(c.name)
+                    const avatarColor = c.avatar_color || getAvatarColor(c.name)
+                    return (
+                      <div key={c.id} className="bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow group">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-7 h-7 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">{c.name}</div>
+                            <div className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.service_type}</div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">{c.name}</div>
-                          <div className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.serviceType}</div>
+
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {c.source && (
+                            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${sourceColors[c.source] || 'bg-slate-100 text-slate-600'}`}>
+                              {sourceIcons[c.source]} {c.source}
+                            </span>
+                          )}
+                          {c.interest && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${interestColors[c.interest] || 'bg-slate-100 text-slate-600'}`}>
+                              {c.interest}
+                            </span>
+                          )}
                         </div>
-                      </div>
 
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${sourceColors[c.source]}`}>
-                          {sourceIcons[c.source]} {c.source}
-                        </span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${interestColors[c.interest]}`}>
-                          {c.interest}
-                        </span>
-                      </div>
-
-                      {(c.phone || c.email) && (
-                        <div className="text-xs text-slate-400 dark:text-slate-500 mb-2 space-y-0.5">
-                          {c.phone && <div className="flex items-center gap-1"><Phone size={10} />{c.phone}</div>}
-                          {c.email && <div className="flex items-center gap-1 truncate"><Mail size={10} />{c.email}</div>}
-                        </div>
-                      )}
-
-                      <div className="flex gap-1 mt-2">
-                        {stageIdx > 0 && (
-                          <button
-                            onClick={() => moveContact(c.id, stage, 'back')}
-                            className="flex-1 flex items-center justify-center gap-0.5 py-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 transition-colors"
-                          >
-                            <ChevronLeft size={12} /> Back
-                          </button>
+                        {(c.phone || c.email) && (
+                          <div className="text-xs text-slate-400 dark:text-slate-500 mb-2 space-y-0.5">
+                            {c.phone && <div className="flex items-center gap-1"><Phone size={10} />{c.phone}</div>}
+                            {c.email && <div className="flex items-center gap-1 truncate"><Mail size={10} />{c.email}</div>}
+                          </div>
                         )}
-                        {stageIdx < pipelineStages.length - 1 && (
-                          <button
-                            onClick={() => moveContact(c.id, stage, 'forward')}
-                            className="flex-1 flex items-center justify-center gap-0.5 py-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded border border-blue-200 dark:border-blue-800 transition-colors"
-                          >
-                            Move <ChevronRight size={12} />
-                          </button>
-                        )}
+
+                        <div className="flex gap-1 mt-2">
+                          {stageIdx > 0 && (
+                            <button
+                              onClick={() => moveContact(c.id, stage, 'back')}
+                              className="flex-1 flex items-center justify-center gap-0.5 py-1 text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 rounded border border-slate-200 dark:border-slate-600 transition-colors"
+                            >
+                              <ChevronLeft size={12} /> Back
+                            </button>
+                          )}
+                          {stageIdx < pipelineStages.length - 1 && (
+                            <button
+                              onClick={() => moveContact(c.id, stage, 'forward')}
+                              className="flex-1 flex items-center justify-center gap-0.5 py-1 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded border border-blue-200 dark:border-blue-800 transition-colors"
+                            >
+                              Move <ChevronRight size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                   {cards.length === 0 && (
                     <div className="py-6 text-center text-xs text-slate-300 dark:text-slate-600">Empty</div>
                   )}
