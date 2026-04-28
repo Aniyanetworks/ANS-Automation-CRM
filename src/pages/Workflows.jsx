@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Activity, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock } from 'lucide-react'
-import { workflowExecutions } from '../data/mockData'
+import { useState, useEffect } from 'react'
+import { Activity, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock, Loader2 } from 'lucide-react'
+import { getWorkflowExecutions } from '../services/api'
 
 const automationColors = {
   Website: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -8,8 +8,9 @@ const automationColors = {
   Instagram: 'bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
   Email: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
   SMS: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  follow_up: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 }
-const automationIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬' }
+const automationIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', follow_up: '🔁' }
 
 function formatDuration(ms) {
   if (!ms) return '—'
@@ -18,22 +19,31 @@ function formatDuration(ms) {
 }
 
 export default function Workflows() {
+  const [executions, setExecutions] = useState([])
+  const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('All')
   const [filterAuto, setFilterAuto] = useState('All')
   const [expanded, setExpanded] = useState(null)
 
-  const total = workflowExecutions.length
-  const success = workflowExecutions.filter(e => e.status === 'success').length
-  const errors = workflowExecutions.filter(e => e.status === 'error').length
-  const successRate = Math.round((success / total) * 100)
-  const avgDuration = Math.round(
-    workflowExecutions.filter(e => e.duration > 0).reduce((s, e) => s + e.duration, 0) /
-    workflowExecutions.filter(e => e.duration > 0).length
-  )
+  useEffect(() => {
+    getWorkflowExecutions()
+      .then(setExecutions)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
-  const allAutomations = [...new Set(workflowExecutions.map(e => e.automation))]
+  const total = executions.length
+  const success = executions.filter(e => e.status === 'success').length
+  const errors = executions.filter(e => e.status === 'error').length
+  const successRate = total ? Math.round((success / total) * 100) : 0
+  const durationsWithValue = executions.filter(e => e.duration_ms > 0)
+  const avgDuration = durationsWithValue.length
+    ? Math.round(durationsWithValue.reduce((s, e) => s + e.duration_ms, 0) / durationsWithValue.length)
+    : 0
 
-  const filtered = workflowExecutions
+  const allAutomations = [...new Set(executions.map(e => e.automation).filter(Boolean))]
+
+  const filtered = executions
     .filter(e => {
       const matchStatus = filterStatus === 'All' || e.status === filterStatus.toLowerCase()
       const matchAuto = filterAuto === 'All' || e.automation === filterAuto
@@ -98,101 +108,110 @@ export default function Workflows() {
         <span className="text-sm text-slate-400 ml-auto">{filtered.length} executions</span>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-max">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                <th className="text-left px-5 py-3 font-medium">Status</th>
-                <th className="text-left px-4 py-3 font-medium">Workflow</th>
-                <th className="text-left px-4 py-3 font-medium">Automation</th>
-                <th className="text-left px-4 py-3 font-medium">Contact</th>
-                <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Trigger</th>
-                <th className="text-left px-4 py-3 font-medium">Duration</th>
-                <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Timestamp</th>
-                <th className="px-4 py-3 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(exec => {
-                const isExpanded = expanded === exec.id
-                return (
-                  <>
-                    <tr
-                      key={exec.id}
-                      className={`border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors ${exec.status === 'error' ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}
-                    >
-                      <td className="px-5 py-3.5">
-                        {exec.status === 'success' ? (
-                          <CheckCircle size={18} className="text-emerald-500" />
-                        ) : (
-                          <XCircle size={18} className="text-red-500" />
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <div className="text-sm font-medium text-slate-900 dark:text-white">{exec.workflowName}</div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${automationColors[exec.automation]}`}>
-                          {automationIcons[exec.automation]} {exec.automation}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-sm text-slate-700 dark:text-slate-300">{exec.contactName}</td>
-                      <td className="px-4 py-3.5 hidden md:table-cell">
-                        <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs font-medium">{exec.trigger}</span>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {exec.status === 'success' ? (
-                          <span className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
-                            <Clock size={13} className="text-slate-400" />
-                            {formatDuration(exec.duration)}
+      {loading ? (
+        <div className="flex items-center justify-center h-48 text-slate-400">
+          <Loader2 size={24} className="animate-spin mr-2" /> Loading executions...
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-max">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="text-left px-5 py-3 font-medium">Status</th>
+                  <th className="text-left px-4 py-3 font-medium">Workflow</th>
+                  <th className="text-left px-4 py-3 font-medium">Automation</th>
+                  <th className="text-left px-4 py-3 font-medium">Contact</th>
+                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Trigger</th>
+                  <th className="text-left px-4 py-3 font-medium">Duration</th>
+                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Timestamp</th>
+                  <th className="px-4 py-3 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(exec => {
+                  const isExpanded = expanded === exec.id
+                  const isError = exec.status === 'error'
+                  return (
+                    <>
+                      <tr
+                        key={exec.id}
+                        className={`border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors ${isError ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}
+                      >
+                        <td className="px-5 py-3.5">
+                          {exec.status === 'success'
+                            ? <CheckCircle size={18} className="text-emerald-500" />
+                            : <XCircle size={18} className="text-red-500" />}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="text-sm font-medium text-slate-900 dark:text-white">{exec.workflow_name || '—'}</div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${automationColors[exec.automation] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                            {automationIcons[exec.automation] || '⚙️'} {exec.automation || '—'}
                           </span>
-                        ) : (
-                          <span className="text-sm text-red-400">Failed</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-400 dark:text-slate-500 hidden sm:table-cell">
-                        {new Date(exec.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {exec.notes && (
-                          <button
-                            onClick={() => setExpanded(isExpanded ? null : exec.id)}
-                            className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors text-red-400"
-                          >
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                    {isExpanded && exec.notes && (
-                      <tr key={`${exec.id}-detail`} className="border-b border-slate-50 dark:border-slate-700 bg-red-50/50 dark:bg-red-900/10">
-                        <td colSpan={8} className="px-5 py-3">
-                          <div className="flex items-start gap-2">
-                            <XCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <div className="text-xs font-semibold text-red-600 dark:text-red-400 mb-0.5">Error Details</div>
-                              <div className="text-sm text-red-700 dark:text-red-300 font-mono bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
-                                {exec.notes}
-                              </div>
-                            </div>
-                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm text-slate-700 dark:text-slate-300">{exec.contact_name || '—'}</td>
+                        <td className="px-4 py-3.5 hidden md:table-cell">
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs font-medium">{exec.trigger || '—'}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {exec.status === 'success' ? (
+                            <span className="flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300">
+                              <Clock size={13} className="text-slate-400" />
+                              {formatDuration(exec.duration_ms)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-red-400">Failed</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-xs text-slate-400 dark:text-slate-500 hidden sm:table-cell">
+                          {exec.timestamp ? new Date(exec.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {exec.notes && (
+                            <button
+                              onClick={() => setExpanded(isExpanded ? null : exec.id)}
+                              className={`p-1.5 rounded transition-colors ${isError ? 'hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400'}`}
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          )}
                         </td>
                       </tr>
-                    )}
-                  </>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length === 0 && (
-          <div className="py-16 text-center text-slate-400">
-            <Activity size={32} className="mx-auto mb-2 opacity-30" />
-            <p>No executions match your filters</p>
+                      {isExpanded && exec.notes && (
+                        <tr key={`${exec.id}-detail`} className={`border-b border-slate-50 dark:border-slate-700 ${isError ? 'bg-red-50/50 dark:bg-red-900/10' : 'bg-slate-50 dark:bg-slate-700/30'}`}>
+                          <td colSpan={8} className="px-5 py-3">
+                            <div className="flex items-start gap-2">
+                              {isError
+                                ? <XCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
+                                : <CheckCircle size={14} className="text-emerald-500 flex-shrink-0 mt-0.5" />}
+                              <div>
+                                <div className={`text-xs font-semibold mb-0.5 ${isError ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                  {isError ? 'Error Details' : 'Notes'}
+                                </div>
+                                <div className={`text-sm font-mono px-3 py-2 rounded-lg border ${isError ? 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-600'}`}>
+                                  {exec.notes}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
+          {filtered.length === 0 && (
+            <div className="py-16 text-center text-slate-400">
+              <Activity size={32} className="mx-auto mb-2 opacity-30" />
+              <p>No executions match your filters</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

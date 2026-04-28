@@ -21,14 +21,14 @@ const interestColors = {
 const statusColors = {
   'New Lead': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
   'Contacted': 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  'Hot Lead': 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
-  'Qualified Lead': 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
-  'Proposal Sent': 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  'Follow-Up': 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  'Interested': 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  'Booked': 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
   'Closed Won': 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
   'Closed Lost': 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
-const leadStatuses = ['New Lead', 'Contacted', 'Hot Lead', 'Qualified Lead', 'Proposal Sent', 'Closed Won', 'Closed Lost']
+const leadStatuses = ['New Lead', 'Contacted', 'Follow-Up', 'Interested', 'Booked', 'Closed Won', 'Closed Lost']
 
 function getInitials(name) {
   if (!name) return '?'
@@ -296,6 +296,23 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
               <div className="text-xs text-slate-400 font-medium mb-2">Last Message Sent</div>
               <p className="text-sm text-slate-700 dark:text-slate-300 italic">"{contact.last_message_sent}"</p>
+            </div>
+          )}
+
+          {(contact.current_step || contact.last_action_type) && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+              <div className="text-xs text-amber-600 dark:text-amber-400 font-semibold mb-2">Follow-Up Sequence</div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-slate-400 mb-0.5">Current Step</div>
+                  <div className="text-sm font-mono font-medium text-slate-800 dark:text-slate-200">{contact.current_step || 'START'}</div>
+                </div>
+                {contact.last_action_type && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    via {contact.last_action_type}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
