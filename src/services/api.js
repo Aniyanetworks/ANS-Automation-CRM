@@ -66,7 +66,7 @@ export async function getAllChatSessions() {
   // Get latest message per session to show in chat list
   const { data, error } = await supabase
     .from('chat_messages')
-    .select('session_id, text, timestamp, role')
+    .select('session_id, phone, text, timestamp, role')
     .order('timestamp', { ascending: false })
   if (error) throw error
 

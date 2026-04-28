@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, MessageSquare, Bot, User, ChevronLeft, Loader2 } from 'lucide-react'
-import { getContacts, getChatMessages } from '../services/api'
+import { getContacts, getChatMessages, getAllChatSessions } from '../services/api'
 
 const sourceColors = {
   Website: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -34,49 +34,93 @@ function formatDate(ts) {
   return new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Splits a message record into individual speaker bubbles.
+// Handles "Customer: ... Agent: ..." combined text format from n8n.
+function parseMessageParts(msg) {
+  const raw = (msg.text || '').trim()
+  const hasPrefix = /\b(Customer|Agent):/i.test(raw)
+
+  if (!hasPrefix) {
+    const text = raw.replace(/-{3,}/g, '').trim()
+    return text ? [{ role: msg.role, text, timestamp: msg.timestamp }] : []
+  }
+
+  const parts = []
+  const regex = /\b(Customer|Agent):\s*([\s\S]*?)(?=\b(?:Customer|Agent):|$)/gi
+  let match
+  while ((match = regex.exec(raw)) !== null) {
+    const role = match[1].toLowerCase() === 'agent' ? 'agent' : 'user'
+    const text = match[2].replace(/-{3,}/g, '').trim()
+    if (text) parts.push({ role, text, timestamp: msg.timestamp })
+  }
+  return parts
+}
+
 export default function ChatHistory() {
-  const [contacts, setContacts] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [contactMap, setContactMap] = useState({})
   const [messages, setMessages] = useState([])
-  const [loadingContacts, setLoadingContacts] = useState(true)
+  const [loadingSessions, setLoadingSessions] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [search, setSearch] = useState('')
-  const [activeId, setActiveId] = useState(null)
+  const [activeSessionId, setActiveSessionId] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => {
-    getContacts()
-      .then(data => setContacts(data.filter(c => c.session_id)))
+    Promise.all([getAllChatSessions(), getContacts()])
+      .then(([sessionData, contactData]) => {
+        setSessions(sessionData)
+        const bySession = {}
+        const byPhone = {}
+        contactData.forEach(c => {
+          if (c.session_id) bySession[c.session_id] = c
+          if (c.phone) byPhone[c.phone] = c
+        })
+        // For each session, resolve contact by session_id first, then phone
+        const map = {}
+        sessionData.forEach(s => {
+          map[s.session_id] = bySession[s.session_id] || byPhone[s.phone] || null
+        })
+        setContactMap(map)
+      })
       .catch(console.error)
-      .finally(() => setLoadingContacts(false))
+      .finally(() => setLoadingSessions(false))
   }, [])
 
   useEffect(() => {
-    if (!activeId) { setMessages([]); return }
-    const contact = contacts.find(c => c.id === activeId)
-    if (!contact?.session_id) return
+    if (!activeSessionId) { setMessages([]); return }
     setLoadingMessages(true)
-    getChatMessages(contact.session_id)
+    getChatMessages(activeSessionId)
       .then(setMessages)
       .catch(console.error)
       .finally(() => setLoadingMessages(false))
-  }, [activeId, contacts])
+  }, [activeSessionId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const filtered = contacts.filter(c => {
+  const filtered = sessions.filter(s => {
     const q = search.toLowerCase()
-    return !q || (c.name || '').toLowerCase().includes(q) || (c.service_type || '').toLowerCase().includes(q) || (c.source || '').toLowerCase().includes(q)
+    if (!q) return true
+    const c = contactMap[s.session_id]
+    return (
+      (c?.name || '').toLowerCase().includes(q) ||
+      (c?.service_type || '').toLowerCase().includes(q) ||
+      (c?.source || '').toLowerCase().includes(q) ||
+      s.session_id.toLowerCase().includes(q)
+    )
   })
 
-  const active = contacts.find(c => c.id === activeId)
+  const active = activeSessionId ? contactMap[activeSessionId] : null
+  const activeSession = activeSessionId ? sessions.find(s => s.session_id === activeSessionId) : null
+  const activeDisplayName = active?.name || activeSession?.phone || 'Unknown'
   const chatHeight = 'h-[calc(100vh-5.5rem)] md:h-[calc(100vh-8rem)]'
 
   return (
     <div className={`flex gap-3 md:gap-5 ${chatHeight}`}>
-      {/* Contact list */}
-      <div className={`flex-col bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-shrink-0 w-full md:w-80 ${activeId ? 'hidden md:flex' : 'flex'}`}>
+      {/* Session list */}
+      <div className={`flex-col bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-shrink-0 w-full md:w-80 ${activeSessionId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-3 border-b border-slate-100 dark:border-slate-700">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -90,19 +134,22 @@ export default function ChatHistory() {
         </div>
 
         <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700">
-          {loadingContacts && (
+          {loadingSessions && (
             <div className="py-10 flex justify-center text-slate-400">
               <Loader2 size={20} className="animate-spin" />
             </div>
           )}
-          {!loadingContacts && filtered.map(c => {
-            const initials = c.avatar || getInitials(c.name)
-            const avatarColor = c.avatar_color || getAvatarColor(c.name)
-            const isActive = c.id === activeId
+          {!loadingSessions && filtered.map(s => {
+            const c = contactMap[s.session_id]
+            const name = c?.name || null
+            const displayName = name || s.phone || 'Unknown'
+            const initials = c?.avatar || getInitials(name || s.phone)
+            const avatarColor = c?.avatar_color || getAvatarColor(displayName)
+            const isActive = s.session_id === activeSessionId
             return (
               <div
-                key={c.id}
-                onClick={() => setActiveId(c.id)}
+                key={s.session_id}
+                onClick={() => setActiveSessionId(s.session_id)}
                 className={`px-4 py-3 cursor-pointer transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
               >
                 <div className="flex items-center gap-2.5">
@@ -111,65 +158,72 @@ export default function ChatHistory() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1">
-                      <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{c.name || 'Unknown'}</div>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${interestColors[c.interest] || 'bg-slate-100 text-slate-600'}`}>
-                        {c.interest}
-                      </span>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{displayName}</div>
+                      {c?.interest && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${interestColors[c.interest] || 'bg-slate-100 text-slate-600'}`}>
+                          {c.interest}
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${sourceColors[c.source] || 'bg-slate-100 text-slate-600'}`}>
-                        {sourceIcons[c.source]} {c.source}
-                      </span>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {c?.source && (
+                        <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${sourceColors[c.source] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
+                          {sourceIcons[c.source] || '💬'} {c.source}
+                        </span>
+                      )}
+                      {c?.service_type && (
+                        <span className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.service_type}</span>
+                      )}
                     </div>
-                    {c.last_message_sent && (
-                      <div className="text-xs text-slate-400 dark:text-slate-500 mt-1 truncate">
-                        🤖 {c.last_message_sent}
-                      </div>
-                    )}
+                    <div className="text-xs text-slate-400 dark:text-slate-500 mt-1 truncate">
+                      {s.role === 'agent' ? '🤖 ' : '👤 '}{s.text}
+                    </div>
                   </div>
                 </div>
               </div>
             )
           })}
-          {!loadingContacts && filtered.length === 0 && (
+          {!loadingSessions && filtered.length === 0 && (
             <div className="py-10 text-center text-sm text-slate-400">No conversations found</div>
           )}
         </div>
 
         <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-          <p className="text-xs text-slate-400">{contacts.length} conversations total</p>
+          <p className="text-xs text-slate-400">{sessions.length} conversations total</p>
         </div>
       </div>
 
       {/* Chat view */}
-      <div className={`flex-1 flex-col bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${activeId ? 'flex' : 'hidden md:flex'}`}>
-        {active ? (
+      <div className={`flex-1 flex-col bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden ${activeSessionId ? 'flex' : 'hidden md:flex'}`}>
+        {activeSessionId ? (
           <>
             <div className="px-4 md:px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setActiveId(null)}
+                  onClick={() => setActiveSessionId(null)}
                   className="md:hidden p-1.5 -ml-1 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <div className={`w-10 h-10 rounded-full ${active.avatar_color || getAvatarColor(active.name)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
-                  {active.avatar || getInitials(active.name)}
+                <div className={`w-10 h-10 rounded-full ${active?.avatar_color || getAvatarColor(active?.name)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                  {active?.avatar || getInitials(active?.name)}
                 </div>
                 <div>
-                  <div className="font-semibold text-slate-900 dark:text-white">{active.name}</div>
+                  <div className="font-semibold text-slate-900 dark:text-white">{activeDisplayName}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[active.source] || 'bg-slate-100 text-slate-600'}`}>
-                      {sourceIcons[active.source]} {active.source}
-                    </span>
-                    <span className="text-xs text-slate-400 dark:text-slate-500">{active.service_type}</span>
-                    {active.phone && <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">{active.phone}</span>}
+                    {active?.source && (
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[active.source] || 'bg-slate-100 text-slate-600'}`}>
+                        {sourceIcons[active.source]} {active.source}
+                      </span>
+                    )}
+                    {active?.service_type && <span className="text-xs text-slate-400 dark:text-slate-500">{active.service_type}</span>}
+                    {active?.phone && <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">{active.phone}</span>}
                   </div>
                 </div>
               </div>
               <div className="text-right hidden sm:block">
                 <div className="text-xs text-slate-400">Session ID</div>
-                <div className="text-xs font-mono text-slate-600 dark:text-slate-400">{active.session_id}</div>
+                <div className="text-xs font-mono text-slate-600 dark:text-slate-400">{activeSessionId}</div>
               </div>
             </div>
 
@@ -186,28 +240,30 @@ export default function ChatHistory() {
                   </span>
                 </div>
               )}
-              {!loadingMessages && messages.map((msg, i) => {
-                const isAgent = msg.role === 'agent'
-                const avatarColor = active.avatar_color || getAvatarColor(active.name)
-                return (
-                  <div key={msg.id || i} className={`flex items-end gap-2.5 ${isAgent ? 'flex-row' : 'flex-row-reverse'}`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? 'bg-blue-500' : avatarColor}`}>
-                      {isAgent ? <Bot size={14} className="text-white" /> : <User size={14} className="text-white" />}
-                    </div>
-                    <div className="max-w-xs sm:max-w-sm">
-                      <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                        isAgent
-                          ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm border border-slate-200 dark:border-slate-600'
-                          : 'bg-blue-600 text-white rounded-tr-sm'
-                      }`}>
-                        {msg.text}
+              {!loadingMessages && messages.flatMap((msg, i) => {
+                const avatarColor = active?.avatar_color || getAvatarColor(active?.name)
+                return parseMessageParts(msg).map((part, j) => {
+                  const isAgent = part.role === 'agent'
+                  return (
+                    <div key={`${msg.id || i}-${j}`} className={`flex items-end gap-2.5 ${isAgent ? 'flex-row' : 'flex-row-reverse'}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? 'bg-blue-500' : avatarColor}`}>
+                        {isAgent ? <Bot size={14} className="text-white" /> : <User size={14} className="text-white" />}
                       </div>
-                      <div className={`text-xs text-slate-400 mt-1 ${isAgent ? 'text-left' : 'text-right'}`}>
-                        {isAgent ? '🤖 Jasica · ' : ''}{formatTime(msg.timestamp)}
+                      <div className="max-w-xs sm:max-w-sm">
+                        <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                          isAgent
+                            ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-tl-sm border border-slate-200 dark:border-slate-600'
+                            : 'bg-blue-600 text-white rounded-tr-sm'
+                        }`}>
+                          {part.text}
+                        </div>
+                        <div className={`text-xs text-slate-400 mt-1 ${isAgent ? 'text-left' : 'text-right'}`}>
+                          {isAgent ? '🤖 Jasica · ' : ''}{formatTime(part.timestamp)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )
+                  )
+                })
               })}
               {!loadingMessages && messages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 pt-16">
