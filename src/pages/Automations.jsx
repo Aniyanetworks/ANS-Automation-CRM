@@ -25,7 +25,7 @@ const AUTOMATION_CONFIG = [
   },
   {
     id: 'facebook',
-    name: 'Facebook DM & Comment',
+    name: 'Facebook AI Responder',
     type: 'Facebook',
     description: 'Automated AI responses to Facebook Messenger DMs and post comments. Handles lead qualification, booking confirmations, and comment replies.',
     webhook: `${N8N_BASE}/facebook-webhook`,
@@ -34,7 +34,7 @@ const AUTOMATION_CONFIG = [
   },
   {
     id: 'initial-sms',
-    name: 'Initial SMS Outreach',
+    name: 'SMS Lead Outreach',
     type: 'SMS',
     description: 'Automated SMS outreach to new leads on a scheduled cadence. Sends initial contact message and records conversation history in Supabase.',
     webhook: '',
@@ -43,7 +43,7 @@ const AUTOMATION_CONFIG = [
   },
   {
     id: 'sms-reply',
-    name: 'SMS AI Reply',
+    name: 'SMS Conversation AI',
     type: 'SMS',
     description: 'AI-powered inbound SMS handler. Responds intelligently to customer replies, manages opt-outs, and logs all interactions.',
     webhook: `${N8N_BASE}/ans-followup`,
@@ -52,7 +52,7 @@ const AUTOMATION_CONFIG = [
   },
   {
     id: 'follow-up',
-    name: 'Follow-Up Sequence',
+    name: 'Lead Nurture Sequence',
     type: 'FollowUp',
     description: 'Automated multi-step follow-up running hourly. Sends SMS touches to leads at defined intervals until they convert or opt out.',
     webhook: '',
