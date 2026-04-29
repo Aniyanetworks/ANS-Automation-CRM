@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Globe, Facebook, MessageCircle, RefreshCw, Zap, CheckCircle, XCircle, Clock, ToggleLeft, ToggleRight, ExternalLink, Loader2 } from 'lucide-react'
+import { Globe, Facebook, MessageCircle, Mail, RefreshCw, Zap, CheckCircle, XCircle, Clock, ToggleLeft, ToggleRight, ExternalLink, Loader2, ChevronRight } from 'lucide-react'
 import { getAllWorkflowExecutions } from '../services/api'
 
 const N8N_BASE = 'https://n8n.srv1300653.hstgr.cloud/webhook'
@@ -54,10 +54,17 @@ const AUTOMATION_CONFIG = [
     id: 'follow-up',
     name: 'Lead Nurture Sequence',
     type: 'FollowUp',
-    description: 'Automated multi-step follow-up running hourly. Sends SMS touches to leads at defined intervals until they convert or opt out.',
+    description: 'Automated multi-step follow-up running hourly. Sends SMS and email touches to leads at defined intervals until they convert or opt out.',
     webhook: '',
     workflowNames: ['Follow-Up Sequence'],
     trigger: 'Schedule (Hourly)',
+    steps: [
+      { id: 'SMS_1',   channel: 'SMS',   delay: '2 hrs'   },
+      { id: 'EMAIL_1', channel: 'Email', delay: '+1 day'  },
+      { id: 'SMS_2',   channel: 'SMS',   delay: '+2 days' },
+      { id: 'EMAIL_2', channel: 'Email', delay: '+3 days' },
+      { id: 'SMS_3',   channel: 'SMS',   delay: '+5 days' },
+    ],
   },
 ]
 
@@ -134,6 +141,33 @@ function AutomationCard({ config, stats, status, onToggle }) {
             {config.workflowNames.map(wn => (
               <span key={wn} className="text-xs px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full">{wn}</span>
             ))}
+          </div>
+        )}
+
+        {config.steps && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Sequence · {config.steps.length} Steps</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">~11 day journey</span>
+            </div>
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+              {config.steps.map((step, i) => (
+                <div key={step.id} className="flex items-center gap-1 flex-shrink-0">
+                  {i > 0 && <ChevronRight size={10} className="text-slate-300 dark:text-slate-600" />}
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 ${
+                      step.channel === 'SMS'
+                        ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300'
+                        : 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                    }`}>
+                      {step.channel === 'SMS' ? <MessageCircle size={10} /> : <Mail size={10} />}
+                      {step.id}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-slate-500">{step.delay}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
