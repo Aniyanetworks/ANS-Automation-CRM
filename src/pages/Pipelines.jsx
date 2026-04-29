@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Phone, Mail, Loader2, GripVertical, X, Calendar, MessageSquare, Tag, User, Activity } from 'lucide-react'
 import { getContacts, updateContact } from '../services/api'
 
-const pipelineStages = ['New Lead', 'Contacted', 'Follow-Up', 'Interested', 'Booked', 'Closed Won', 'Closed Lost']
+const pipelineStages = ['New Lead', 'Follow-Up', 'Contacted', 'Interested', 'Booked', 'Closed Won', 'Closed Lost']
 
 const stageColors = {
   'New Lead':    'border-t-slate-400',
@@ -64,8 +64,11 @@ const sourceColors = {
   Instagram: 'bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300',
   Email:     'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
   SMS:       'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+  WhatsApp:  'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+  Referral:  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  Other:     'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
 }
-const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬' }
+const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', WhatsApp: '📱', Referral: '🤝', Other: '📋' }
 const interestColors = {
   Yes:     'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   No:      'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
@@ -361,9 +364,7 @@ export default function Pipelines() {
             <div key={stage} className="flex-shrink-0 w-52 md:w-56">
               <div
                 className={`rounded-xl border border-slate-200 dark:border-slate-700 border-t-4 ${stageColors[stage]} shadow-sm overflow-hidden transition-all duration-150 ${isOver ? stageDrop[stage] : 'bg-white dark:bg-slate-800'}`}
-                onDragOver={e => onDragOver(e, stage)}
                 onDragLeave={e => onDragLeave(e, stage)}
-                onDrop={e => onDrop(e, stage)}
               >
                 {/* Column header */}
                 <div className={`px-3 py-2.5 ${isOver ? '' : stageBg[stage]} border-b border-slate-100 dark:border-slate-700`}>
@@ -376,7 +377,11 @@ export default function Pipelines() {
                 </div>
 
                 {/* Cards */}
-                <div className="p-2 space-y-2 min-h-32 max-h-[calc(100vh-18rem)] overflow-y-auto">
+                <div
+                  className="p-2 space-y-2 min-h-32 max-h-[calc(100vh-18rem)] overflow-y-auto"
+                  onDragOver={e => onDragOver(e, stage)}
+                  onDrop={e => onDrop(e, stage)}
+                >
                   {cards.map(c => {
                     const initials = c.avatar || getInitials(c.name)
                     const avatarColor = c.avatar_color || getAvatarColor(c.name)
@@ -388,6 +393,7 @@ export default function Pipelines() {
                         draggable
                         onDragStart={e => onDragStart(e, c.id, stage)}
                         onDragEnd={onDragEnd}
+                        onDragOver={e => e.preventDefault()}
                         onClick={() => onCardClick(c)}
                         className={`bg-white dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-lg p-3 shadow-sm transition-all duration-150 group select-none
                           ${isDragging ? 'opacity-40 scale-95 shadow-none' : 'hover:shadow-md hover:border-slate-300 dark:hover:border-slate-500 cursor-pointer'}

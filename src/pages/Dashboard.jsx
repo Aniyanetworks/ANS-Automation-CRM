@@ -4,20 +4,26 @@ import { getDashboardStats, getWorkflowExecutions } from '../services/api'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 const sourceColors = {
-  Website: '#3b82f6',
-  Facebook: '#6366f1',
+  Website:   '#3b82f6',
+  Facebook:  '#6366f1',
   Instagram: '#ec4899',
-  Email: '#8b5cf6',
-  SMS: '#14b8a6',
+  Email:     '#8b5cf6',
+  SMS:       '#14b8a6',
+  WhatsApp:  '#22c55e',
+  Referral:  '#f59e0b',
+  Other:     '#94a3b8',
 }
-const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬' }
+const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', WhatsApp: '📱', Referral: '🤝', Other: '📋' }
 
 const sourceBadgeColors = {
-  Website: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  Facebook: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
+  Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  Facebook:  'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300',
   Instagram: 'bg-pink-50 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300',
-  Email: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  SMS: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  Email:     'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+  SMS:       'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  WhatsApp:  'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+  Referral:  'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  Other:     'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
 }
 const interestBadgeColors = {
   Yes: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -85,8 +91,8 @@ export default function Dashboard() {
 
   const pipelineCounts = {
     'New Lead': stats.newLeads,
-    'Contacted': stats.contacted,
     'Follow-Up': stats.followUp,
+    'Contacted': stats.contacted,
     'Interested': stats.interested,
     'Booked': stats.booked,
     'Won': stats.closedWon,
