@@ -299,7 +299,7 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
             </div>
           )}
 
-          {(contact.current_step || contact.last_action_type) && (
+          {contact.lead_status === 'Follow-Up' && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
               <div className="text-xs text-amber-600 dark:text-amber-400 font-semibold mb-2">Follow-Up Sequence</div>
               <div className="flex items-center justify-between">
