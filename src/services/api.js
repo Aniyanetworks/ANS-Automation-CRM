@@ -121,6 +121,15 @@ export async function deleteFollowup(id) {
 
 // ─── WORKFLOW EXECUTIONS ──────────────────────────────────────────────────────
 
+export async function getAllWorkflowExecutions() {
+  const { data, error } = await supabase
+    .from('workflow_executions')
+    .select('*')
+    .order('timestamp', { ascending: false })
+  if (error) throw error
+  return data
+}
+
 export async function getWorkflowExecutions() {
   const { data, error } = await supabase
     .from('workflow_executions')

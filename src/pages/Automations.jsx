@@ -1,108 +1,181 @@
-import { useState } from 'react'
-import { Globe, Facebook, Instagram, Mail, MessageCircle, Zap, CheckCircle, XCircle, Clock, ToggleLeft, ToggleRight, ExternalLink } from 'lucide-react'
-import { automations, workflowExecutions } from '../data/mockData'
+import { useState, useEffect } from 'react'
+import { Globe, Facebook, MessageCircle, RefreshCw, Zap, CheckCircle, XCircle, Clock, ToggleLeft, ToggleRight, ExternalLink, Loader2 } from 'lucide-react'
+import { getAllWorkflowExecutions } from '../services/api'
+
+const N8N_BASE = 'https://n8n.srv1300653.hstgr.cloud/webhook'
+
+const AUTOMATION_CONFIG = [
+  {
+    id: 'chat-widget',
+    name: 'Jasica Live Chat',
+    type: 'Website',
+    description: 'AI-powered live chat on aniyanetworks.net. Jasica AI agent handles visitor queries, collects lead info, and sends booking links.',
+    webhook: `${N8N_BASE}/chat-widget`,
+    workflowNames: ['Website Chat Widget — AI Reply'],
+    trigger: 'Webhook',
+  },
+  {
+    id: 'website-contact',
+    name: 'Website Lead Capture',
+    type: 'Website',
+    description: 'Captures leads from the WordPress contact form, creates or updates Supabase contacts, and triggers the follow-up sequence automatically.',
+    webhook: `${N8N_BASE}/aniyanetworks-contact-us`,
+    workflowNames: ['Website Contact Form'],
+    trigger: 'Webhook',
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook DM & Comment',
+    type: 'Facebook',
+    description: 'Automated AI responses to Facebook Messenger DMs and post comments. Handles lead qualification, booking confirmations, and comment replies.',
+    webhook: `${N8N_BASE}/facebook-webhook`,
+    workflowNames: ['Facebook DM — AI Reply', 'Facebook DM — Booking Confirmed', 'Facebook Comment — AI Reply'],
+    trigger: 'Facebook Webhook',
+  },
+  {
+    id: 'initial-sms',
+    name: 'Initial SMS Outreach',
+    type: 'SMS',
+    description: 'Automated SMS outreach to new leads on a scheduled cadence. Sends initial contact message and records conversation history in Supabase.',
+    webhook: '',
+    workflowNames: ['Initial SMS Outreach'],
+    trigger: 'Schedule',
+  },
+  {
+    id: 'sms-reply',
+    name: 'SMS AI Reply',
+    type: 'SMS',
+    description: 'AI-powered inbound SMS handler. Responds intelligently to customer replies, manages opt-outs, and logs all interactions.',
+    webhook: `${N8N_BASE}/ans-followup`,
+    workflowNames: ['SMS AI Reply', 'SMS Opt-Out'],
+    trigger: 'Webhook',
+  },
+  {
+    id: 'follow-up',
+    name: 'Follow-Up Sequence',
+    type: 'FollowUp',
+    description: 'Automated multi-step follow-up running hourly. Sends SMS touches to leads at defined intervals until they convert or opt out.',
+    webhook: '',
+    workflowNames: ['Follow-Up Sequence'],
+    trigger: 'Schedule (Hourly)',
+  },
+]
 
 const automationIcons = {
   Website: Globe,
   Facebook: Facebook,
-  Instagram: Instagram,
-  Email: Mail,
   SMS: MessageCircle,
+  FollowUp: RefreshCw,
 }
 
 const gradients = {
   Website: 'from-blue-500 to-cyan-500',
   Facebook: 'from-indigo-600 to-blue-600',
-  Instagram: 'from-pink-500 to-rose-600',
-  Email: 'from-purple-500 to-violet-600',
   SMS: 'from-teal-500 to-emerald-500',
+  FollowUp: 'from-amber-500 to-orange-500',
 }
 
 const cardBorders = {
   Website: 'border-blue-200 dark:border-blue-800',
   Facebook: 'border-indigo-200 dark:border-indigo-800',
-  Instagram: 'border-pink-200 dark:border-pink-800',
-  Email: 'border-purple-200 dark:border-purple-800',
   SMS: 'border-teal-200 dark:border-teal-800',
+  FollowUp: 'border-amber-200 dark:border-amber-800',
 }
 
-function AutomationCard({ automation, onToggle }) {
-  const Icon = automationIcons[automation.type] || Zap
-  const recentExecs = workflowExecutions
-    .filter(e => e.automation === automation.type)
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-    .slice(0, 5)
+function computeStats(executions, workflowNames) {
+  const typeExecs = executions.filter(e => workflowNames.includes(e.workflow_name))
+  const total = typeExecs.length
+  const errors = typeExecs.filter(e => e.status === 'error').length
+  const successRate = total ? Math.round((((total - errors) / total) * 100) * 10) / 10 : 0
+  const lastRun = typeExecs[0]?.timestamp || null
+  const recent = typeExecs.slice(0, 5)
+  return { total, errors, successRate, lastRun, recent }
+}
+
+function AutomationCard({ config, stats, status, onToggle }) {
+  const Icon = automationIcons[config.type] || Zap
+  const { total, errors, successRate, lastRun, recent } = stats
 
   return (
-    <div className={`bg-white dark:bg-slate-800 rounded-2xl border ${cardBorders[automation.type]} shadow-sm overflow-hidden transition-all hover:shadow-lg`}>
-      <div className={`bg-gradient-to-r ${gradients[automation.type]} p-5 text-white`}>
+    <div className={`bg-white dark:bg-slate-800 rounded-2xl border ${cardBorders[config.type] || 'border-slate-200 dark:border-slate-700'} shadow-sm overflow-hidden transition-all hover:shadow-lg`}>
+      <div className={`bg-gradient-to-r ${gradients[config.type] || 'from-slate-500 to-slate-600'} p-5 text-white`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm flex-shrink-0">
               <Icon size={22} className="text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-white">{automation.name}</h3>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <div className={`w-1.5 h-1.5 rounded-full ${automation.status === 'Active' ? 'bg-green-300' : 'bg-white/50'}`}></div>
-                <span className="text-white/80 text-xs font-medium">{automation.status}</span>
+              <h3 className="font-bold text-white">{config.name}</h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className={`w-1.5 h-1.5 rounded-full ${status === 'Active' ? 'bg-green-300' : 'bg-white/50'}`}></div>
+                <span className="text-white/80 text-xs font-medium">{status}</span>
+                <span className="text-white/40 text-xs">·</span>
+                <span className="text-white/70 text-xs">{config.trigger}</span>
               </div>
             </div>
           </div>
           <button
-            onClick={() => onToggle(automation.id)}
+            onClick={() => onToggle(config.id)}
             className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-            title={automation.status === 'Active' ? 'Pause automation' : 'Resume automation'}
+            title={status === 'Active' ? 'Pause automation' : 'Resume automation'}
           >
-            {automation.status === 'Active'
+            {status === 'Active'
               ? <ToggleRight size={20} className="text-white" />
-              : <ToggleLeft size={20} className="text-white/60" />
-            }
+              : <ToggleLeft size={20} className="text-white/60" />}
           </button>
         </div>
       </div>
 
       <div className="p-5 space-y-4">
-        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{automation.description}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{config.description}</p>
+
+        {config.workflowNames.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            {config.workflowNames.map(wn => (
+              <span key={wn} className="text-xs px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-full">{wn}</span>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 text-center">
-            <div className="text-xl font-bold text-slate-900 dark:text-white">{automation.totalExecutions}</div>
+            <div className="text-xl font-bold text-slate-900 dark:text-white">{total}</div>
             <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Total Runs</div>
           </div>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-3 text-center">
-            <div className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{automation.successRate}%</div>
-            <div className="text-xs text-emerald-500 dark:text-emerald-500 mt-0.5">Success Rate</div>
+            <div className="text-xl font-bold text-emerald-700 dark:text-emerald-400">{successRate}%</div>
+            <div className="text-xs text-emerald-500 mt-0.5">Success Rate</div>
           </div>
-          <div className={`${automation.recentErrors > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-slate-50 dark:bg-slate-700/50'} rounded-xl p-3 text-center`}>
-            <div className={`text-xl font-bold ${automation.recentErrors > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>
-              {automation.recentErrors}
+          <div className={`${errors > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-slate-50 dark:bg-slate-700/50'} rounded-xl p-3 text-center`}>
+            <div className={`text-xl font-bold ${errors > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>
+              {errors}
             </div>
-            <div className={`text-xs mt-0.5 ${automation.recentErrors > 0 ? 'text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>Recent Errors</div>
+            <div className={`text-xs mt-0.5 ${errors > 0 ? 'text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>Errors</div>
           </div>
         </div>
 
         <div>
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Recent Executions</div>
           <div className="space-y-1.5">
-            {recentExecs.length > 0 ? recentExecs.map(exec => (
+            {recent.length > 0 ? recent.map(exec => (
               <div key={exec.id} className="flex items-center gap-2.5 py-1.5 px-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                 {exec.status === 'success'
                   ? <CheckCircle size={14} className="text-emerald-500 flex-shrink-0" />
-                  : <XCircle size={14} className="text-red-500 flex-shrink-0" />
-                }
+                  : <XCircle size={14} className="text-red-500 flex-shrink-0" />}
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate block">{exec.contactName}</span>
-                  {exec.notes && (
+                  <span className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate block">
+                    {exec.contact_name || exec.workflow_name || '—'}
+                  </span>
+                  {exec.notes && exec.status === 'error' && (
                     <span className="text-xs text-red-500 dark:text-red-400 truncate block">{exec.notes.slice(0, 50)}...</span>
                   )}
                 </div>
                 <span className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">
-                  {new Date(exec.timestamp).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' })}
+                  {exec.timestamp ? new Date(exec.timestamp).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' }) : '—'}
                 </span>
               </div>
             )) : (
-              <div className="text-xs text-slate-400 py-2 text-center">No recent executions</div>
+              <div className="text-xs text-slate-400 py-2 text-center">No executions yet</div>
             )}
           </div>
         </div>
@@ -110,11 +183,13 @@ function AutomationCard({ automation, onToggle }) {
         <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700">
           <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
             <Clock size={12} />
-            Last run: {new Date(automation.lastRun).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            {lastRun
+              ? `Last run: ${new Date(lastRun).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+              : 'No runs yet'}
           </div>
-          {automation.webhook && (
+          {config.webhook && (
             <a
-              href={automation.webhook}
+              href={config.webhook}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
@@ -129,35 +204,48 @@ function AutomationCard({ automation, onToggle }) {
 }
 
 export default function Automations() {
-  const [items, setItems] = useState(automations)
+  const [executions, setExecutions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [statuses, setStatuses] = useState(
+    Object.fromEntries(AUTOMATION_CONFIG.map(a => [a.id, 'Active']))
+  )
+
+  useEffect(() => {
+    getAllWorkflowExecutions()
+      .then(setExecutions)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
   function toggleStatus(id) {
-    setItems(prev => prev.map(a =>
-      a.id === id ? { ...a, status: a.status === 'Active' ? 'Paused' : 'Active' } : a
-    ))
+    setStatuses(prev => ({ ...prev, [id]: prev[id] === 'Active' ? 'Paused' : 'Active' }))
   }
 
-  const active = items.filter(a => a.status === 'Active').length
-  const total = items.length
-  const totalRuns = items.reduce((s, a) => s + a.totalExecutions, 0)
-  const avgSuccess = Math.round(items.reduce((s, a) => s + a.successRate, 0) / items.length * 10) / 10
+  const activeCount = Object.values(statuses).filter(s => s === 'Active').length
+  const totalRuns = executions.length
+  const totalErrors = executions.filter(e => e.status === 'error').length
+  const avgSuccess = totalRuns ? Math.round(((totalRuns - totalErrors) / totalRuns) * 1000) / 10 : 0
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
           <div className="text-slate-500 dark:text-slate-400 text-sm font-medium">Active Automations</div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{active}/{total}</div>
-          <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Running channels</div>
+          <div className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{activeCount}/{AUTOMATION_CONFIG.length}</div>
+          <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Running workflows</div>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
           <div className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Executions</div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{totalRuns.toLocaleString()}</div>
-          <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Across all channels</div>
+          <div className="text-3xl font-bold text-slate-900 dark:text-white mt-1">
+            {loading ? <Loader2 size={24} className="animate-spin text-slate-400" /> : totalRuns.toLocaleString()}
+          </div>
+          <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Across all workflows</div>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
           <div className="text-slate-500 dark:text-slate-400 text-sm font-medium">Avg Success Rate</div>
-          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{avgSuccess}%</div>
+          <div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+            {loading ? <Loader2 size={24} className="animate-spin text-slate-400" /> : `${avgSuccess}%`}
+          </div>
           <div className="flex items-center gap-1 mt-1">
             <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full">
               <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${avgSuccess}%` }} />
@@ -175,11 +263,23 @@ export default function Automations() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {items.map(automation => (
-          <AutomationCard key={automation.id} automation={automation} onToggle={toggleStatus} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center h-48 text-slate-400">
+          <Loader2 size={24} className="animate-spin mr-2" /> Loading automations...
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {AUTOMATION_CONFIG.map(config => (
+            <AutomationCard
+              key={config.id}
+              config={config}
+              stats={computeStats(executions, config.workflowNames)}
+              status={statuses[config.id]}
+              onToggle={toggleStatus}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
