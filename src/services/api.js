@@ -131,6 +131,28 @@ export async function getWorkflowExecutions() {
   return data
 }
 
+export async function getFollowUpExecutions() {
+  const { data, error } = await supabase
+    .from('workflow_executions')
+    .select('*')
+    .eq('automation', 'follow_up')
+    .order('timestamp', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data
+}
+
+export async function getFollowUpSequenceContacts() {
+  const { data, error } = await supabase
+    .from('contacts')
+    .select('id, name, phone, email, source, current_step, last_action_type, last_message_sent, last_action_date, lead_status, customer_replied, unsubscribe, avatar, avatar_color')
+    .not('current_step', 'is', null)
+    .neq('current_step', 'START')
+    .order('last_action_date', { ascending: false })
+  if (error) throw error
+  return data
+}
+
 // ─── SEARCH SUGGESTIONS ──────────────────────────────────────────────────────
 
 export async function searchContacts(query) {
