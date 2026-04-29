@@ -11,6 +11,22 @@ const automationColors = {
   follow_up: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 }
 const automationIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', follow_up: '🔁' }
+const automationLabels = {
+  Website: 'Website',
+  Facebook: 'Facebook',
+  Instagram: 'Instagram',
+  Email: 'Email',
+  SMS: 'SMS',
+  follow_up: 'Follow-Up',
+}
+const automationTextColors = {
+  Website: 'text-blue-600 dark:text-blue-400',
+  Facebook: 'text-indigo-600 dark:text-indigo-400',
+  Instagram: 'text-pink-600 dark:text-pink-400',
+  Email: 'text-purple-600 dark:text-purple-400',
+  SMS: 'text-teal-600 dark:text-teal-400',
+  follow_up: 'text-amber-600 dark:text-amber-400',
+}
 
 function formatDuration(ms) {
   if (!ms) return '—'
@@ -103,7 +119,7 @@ export default function Workflows() {
           className="px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="All">All Automations</option>
-          {allAutomations.map(a => <option key={a}>{a}</option>)}
+          {allAutomations.map(a => <option key={a} value={a}>{automationLabels[a] || a}</option>)}
         </select>
         <span className="text-sm text-slate-400 ml-auto">{filtered.length} executions</span>
       </div>
@@ -144,11 +160,11 @@ export default function Workflows() {
                             : <XCircle size={18} className="text-red-500" />}
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="text-sm font-medium text-slate-900 dark:text-white">{exec.workflow_name || '—'}</div>
+                          <div className={`text-sm font-medium ${automationTextColors[exec.automation] || 'text-slate-900 dark:text-white'}`}>{exec.workflow_name || '—'}</div>
                         </td>
                         <td className="px-4 py-3.5">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${automationColors[exec.automation] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
-                            {automationIcons[exec.automation] || '⚙️'} {exec.automation || '—'}
+                            {automationIcons[exec.automation] || '⚙️'} {automationLabels[exec.automation] || exec.automation || '—'}
                           </span>
                         </td>
                         <td className="px-4 py-3.5 text-sm text-slate-700 dark:text-slate-300">{exec.contact_name || '—'}</td>
