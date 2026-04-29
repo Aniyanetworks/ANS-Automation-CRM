@@ -5,19 +5,19 @@ import { getFollowUpExecutions, getFollowUpSequenceContacts } from '../services/
 const stepOrder = ['START', 'SMS_1', 'EMAIL_1', 'SMS_2', 'EMAIL_2', 'SMS_3']
 
 const SEQUENCE_STEPS = [
-  { id: 'SMS_1',   channel: 'SMS',   delay: '2 hrs'   },
-  { id: 'EMAIL_1', channel: 'Email', delay: '+1 day'  },
-  { id: 'SMS_2',   channel: 'SMS',   delay: '+2 days' },
+  { id: 'SMS_1', channel: 'SMS', delay: '2 hrs' },
+  { id: 'EMAIL_1', channel: 'Email', delay: '+1 day' },
+  { id: 'SMS_2', channel: 'SMS', delay: '+2 days' },
   { id: 'EMAIL_2', channel: 'Email', delay: '+3 days' },
-  { id: 'SMS_3',   channel: 'SMS',   delay: '+5 days' },
+  { id: 'SMS_3', channel: 'SMS', delay: '+5 days' },
 ]
 const stepColors = {
-  START:   'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
-  SMS_1:   'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  START: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  SMS_1: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
   EMAIL_1: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  SMS_2:   'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  SMS_2: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
   EMAIL_2: 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-  SMS_3:   'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
+  SMS_3: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
 }
 
 function getInitials(name) {
@@ -133,10 +133,10 @@ export default function Followups() {
       .finally(() => setLoading(false))
   }, [])
 
-  const totalInSeq   = seqContacts.length
-  const viaSMS       = seqContacts.filter(c => c.last_action_type === 'SMS').length
-  const viaEmail     = seqContacts.filter(c => c.last_action_type === 'EMAIL').length
-  const replied      = seqContacts.filter(c => c.customer_replied === 'Yes').length
+  const totalInSeq = seqContacts.length
+  const viaSMS = seqContacts.filter(c => c.last_action_type === 'SMS').length
+  const viaEmail = seqContacts.filter(c => c.last_action_type === 'EMAIL').length
+  const replied = seqContacts.filter(c => c.customer_replied === 'Yes').length
 
   const filteredSeq = seqFilter === 'All' ? seqContacts : seqContacts.filter(c => c.current_step === seqFilter)
 
@@ -151,10 +151,10 @@ export default function Followups() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'In Sequence',   count: totalInSeq, color: 'bg-slate-900 dark:bg-slate-700' },
-          { label: 'Sent via SMS',  count: viaSMS,     color: 'bg-teal-500' },
-          { label: 'Sent via Email',count: viaEmail,   color: 'bg-purple-500' },
-          { label: 'Replied',       count: replied,    color: 'bg-emerald-500' },
+          { label: 'In Sequence', count: totalInSeq, color: 'bg-slate-900 dark:bg-slate-700' },
+          { label: 'Sent via SMS', count: viaSMS, color: 'bg-teal-500' },
+          { label: 'Sent via Email', count: viaEmail, color: 'bg-purple-500' },
+          { label: 'Replied', count: replied, color: 'bg-emerald-500' },
         ].map(({ label, count, color }) => (
           <div key={label} className={`${color} rounded-xl p-4 shadow-sm`}>
             <div className="text-2xl font-bold text-white">{count}</div>
@@ -164,19 +164,16 @@ export default function Followups() {
       </div>
 
       {/* Step filter — timeline */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-3">
+      <div className="shadow-sm p-3">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          {/* All */}
           <button
             onClick={() => setSeqFilter('All')}
-            className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all ${
-              seqFilter === 'All'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
+            className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl transition-all ${seqFilter === 'All'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+              }`}
           >
-            <span className="text-base font-bold leading-none">{seqContacts.length}</span>
-            <span className="text-xs font-mono mt-0.5">All</span>
+            <span className="text-base font-bold leading-none"> All</span>
           </button>
 
           {SEQUENCE_STEPS.map(step => {
@@ -189,20 +186,18 @@ export default function Followups() {
                 <ChevronRight size={13} className="text-slate-300 dark:text-slate-600" />
                 <button
                   onClick={() => setSeqFilter(step.id)}
-                  className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all ${
-                    isActive
-                      ? isSMS
-                        ? 'bg-teal-500 text-white shadow-sm'
-                        : 'bg-purple-500 text-white shadow-sm'
-                      : 'bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                  }`}
+                  className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition-all ${isActive
+                    ? isSMS
+                      ? 'bg-teal-500 text-white shadow-sm'
+                      : 'bg-purple-500 text-white shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
                 >
                   <div className="flex items-center gap-1.5">
                     <StepIcon size={11} className={isActive ? 'text-white/80' : isSMS ? 'text-teal-500' : 'text-purple-500'} />
                     <span className="text-xs font-mono font-semibold">{step.id}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold leading-none ${
-                      isActive ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
-                    }`}>{count}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold leading-none ${isActive ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300'
+                      }`}>{count}</span>
                   </div>
                   <span className={`text-xs font-sans ${isActive ? 'text-white/70' : 'text-slate-400 dark:text-slate-500'}`}>{step.delay}</span>
                 </button>
