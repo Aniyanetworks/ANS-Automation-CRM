@@ -1,4 +1,4 @@
--- ANS CRM Initial Schema
+-- ANS GHL Initial Schema
 
 CREATE TABLE IF NOT EXISTS contacts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

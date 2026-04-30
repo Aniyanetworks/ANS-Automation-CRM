@@ -1,8 +1,9 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, MessageSquare, CalendarDays,
-  Activity, Zap, Layers, Settings, Bot, X,
+  Activity, Zap, Layers, Settings, Bot, X, LogOut,
 } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -14,7 +15,24 @@ const navItems = [
   { to: '/automations', icon: Zap, label: 'Automations' },
 ]
 
+function getInitials(name) {
+  if (!name) return '?'
+  return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+}
+
 export default function Sidebar({ isOpen, onClose }) {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
+  const email = user?.email || ''
+  const initials = getInitials(user?.user_metadata?.full_name || user?.email)
+
+  async function handleLogout() {
+    await signOut()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <aside className={`
       fixed md:static inset-y-0 left-0 z-30
@@ -28,7 +46,7 @@ export default function Sidebar({ isOpen, onClose }) {
             <Bot size={18} className="text-white" />
           </div>
           <div>
-            <div className="text-white font-bold text-sm tracking-wide">ANS CRM</div>
+            <div className="text-white font-bold text-sm tracking-wide">ANS GHL</div>
             <div className="text-slate-400 text-xs">Aniya Networks</div>
           </div>
         </div>
@@ -47,10 +65,9 @@ export default function Sidebar({ isOpen, onClose }) {
             to={to}
             onClick={onClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${isActive
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`
             }
           >
@@ -60,7 +77,7 @@ export default function Sidebar({ isOpen, onClose }) {
         ))}
       </nav>
 
-      <div className="px-3 pb-4 border-t border-slate-800 pt-3">
+      <div className="px-3 pb-4 border-t border-slate-800 pt-3 space-y-0.5">
         <NavLink
           to="/settings"
           onClick={onClose}
@@ -69,13 +86,20 @@ export default function Sidebar({ isOpen, onClose }) {
           <Settings size={17} />
           Settings
         </NavLink>
-        <div className="mt-2 px-3 py-2 flex items-center gap-3">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-red-400 hover:bg-red-900/20 transition-all duration-150"
+        >
+          <LogOut size={17} />
+          Sign Out
+        </button>
+        <div className="mt-2 px-3 py-2.5 flex items-center gap-3 rounded-lg bg-slate-800/50">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-            MP
+            {initials}
           </div>
           <div className="min-w-0">
-            <div className="text-white text-xs font-semibold truncate">Manam Parves</div>
-            <div className="text-slate-500 text-xs">Admin</div>
+            <div className="text-white text-xs font-semibold truncate">{displayName}</div>
+            <div className="text-slate-500 text-xs truncate">{email}</div>
           </div>
         </div>
       </div>
