@@ -117,11 +117,11 @@ export default function Dashboard() {
           color="bg-emerald-500"
         />
         <StatCard
-          title="Pending Follow-ups"
-          value={stats.pendingFollowups}
-          sub={stats.overdueFollowups > 0 ? `${stats.overdueFollowups} overdue` : 'All on track'}
+          title="Active Follow-ups"
+          value={stats.followUp}
+          sub={stats.overdueFollowups > 0 ? `${stats.overdueFollowups} overdue` : stats.followUp > 0 ? 'In follow-up pipeline' : 'None active'}
           icon={CalendarDays}
-          color={stats.overdueFollowups > 0 ? 'bg-amber-500' : 'bg-violet-500'}
+          color={stats.overdueFollowups > 0 ? 'bg-amber-500' : stats.followUp > 0 ? 'bg-violet-500' : 'bg-slate-400'}
         />
         <StatCard
           title="Workflow Success Rate"
