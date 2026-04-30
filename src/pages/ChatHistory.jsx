@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, MessageSquare, Bot, User, ChevronLeft, Loader2 } from 'lucide-react'
-import { getContacts, getChatMessages, getAllChatSessions } from '../services/api'
+import { Search, MessageSquare, Bot, User, ChevronLeft, Loader2, Trash2 } from 'lucide-react'
+import { getContacts, getChatMessages, getAllChatSessions, deleteChatSession } from '../services/api'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const sourceColors = {
   Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -67,6 +68,7 @@ export default function ChatHistory() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [search, setSearch] = useState('')
   const [activeSessionId, setActiveSessionId] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null) // { sessionId, displayName }
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -115,6 +117,23 @@ export default function ChatHistory() {
     )
   })
 
+  function handleDeleteSession(e, sessionId, displayName) {
+    e.stopPropagation()
+    setConfirmDelete({ sessionId, displayName })
+  }
+
+  async function confirmDeleteSession() {
+    const { sessionId } = confirmDelete
+    setConfirmDelete(null)
+    try {
+      await deleteChatSession(sessionId)
+      setSessions(prev => prev.filter(s => s.session_id !== sessionId))
+      if (activeSessionId === sessionId) setActiveSessionId(null)
+    } catch (err) {
+      alert('Failed to delete: ' + err.message)
+    }
+  }
+
   const active = activeSessionId ? contactMap[activeSessionId] : null
   const activeSession = activeSessionId ? sessions.find(s => s.session_id === activeSessionId) : null
   const activeDisplayName = active?.name || activeSession?.phone || 'Unknown'
@@ -122,6 +141,14 @@ export default function ChatHistory() {
 
   return (
     <div className={`flex gap-3 md:gap-5 ${chatHeight}`}>
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete Conversation"
+        message={`Delete the conversation with ${confirmDelete?.displayName}? All messages will be permanently removed.`}
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteSession}
+        onCancel={() => setConfirmDelete(null)}
+      />
       {/* Session list */}
       <div className={`flex-col bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex-shrink-0 w-full md:w-80 ${activeSessionId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-3 border-b border-slate-100 dark:border-slate-700">
@@ -153,8 +180,15 @@ export default function ChatHistory() {
               <div
                 key={s.session_id}
                 onClick={() => setActiveSessionId(s.session_id)}
-                className={`px-4 py-3 cursor-pointer transition-colors ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
+                className={`group px-4 py-3 cursor-pointer transition-colors relative ${isActive ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500' : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
               >
+                <button
+                  onClick={e => handleDeleteSession(e, s.session_id, displayName)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                  title="Delete conversation"
+                >
+                  <Trash2 size={14} />
+                </button>
                 <div className="flex items-center gap-2.5">
                   <div className={`w-9 h-9 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
                     {initials}

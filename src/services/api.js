@@ -50,6 +50,14 @@ export async function deleteContact(id) {
   if (error) throw error
 }
 
+export async function deleteContacts(ids) {
+  const { error } = await supabase
+    .from('contacts')
+    .delete()
+    .in('id', ids)
+  if (error) throw error
+}
+
 // ─── CHAT MESSAGES ───────────────────────────────────────────────────────────
 
 export async function getChatMessages(sessionId) {
@@ -60,6 +68,14 @@ export async function getChatMessages(sessionId) {
     .order('timestamp', { ascending: true })
   if (error) throw error
   return data
+}
+
+export async function deleteChatSession(sessionId) {
+  const { error } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('session_id', sessionId)
+  if (error) throw error
 }
 
 export async function getAllChatSessions() {
@@ -116,6 +132,14 @@ export async function deleteFollowup(id) {
     .from('followups')
     .delete()
     .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteWorkflowExecutions(ids) {
+  const { error } = await supabase
+    .from('workflow_executions')
+    .delete()
+    .in('id', ids)
   if (error) throw error
 }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Activity, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock, Loader2 } from 'lucide-react'
-import { getWorkflowExecutions } from '../services/api'
+import { Activity, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock, Loader2, Trash2 } from 'lucide-react'
+import { getWorkflowExecutions, deleteWorkflowExecutions } from '../services/api'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const automationColors = {
   Website: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -40,6 +41,8 @@ export default function Workflows() {
   const [filterStatus, setFilterStatus] = useState('All')
   const [filterAuto, setFilterAuto] = useState('All')
   const [expanded, setExpanded] = useState(null)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   useEffect(() => {
     getWorkflowExecutions()
@@ -67,8 +70,49 @@ export default function Workflows() {
     })
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 
+  const allSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id))
+  const someSelected = filtered.some(e => selectedIds.has(e.id)) && !allSelected
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(e => e.id)))
+    }
+  }
+
+  function toggleSelect(id, e) {
+    e.stopPropagation()
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function executeDelete() {
+    const ids = [...selectedIds]
+    setConfirmOpen(false)
+    try {
+      await deleteWorkflowExecutions(ids)
+      setExecutions(prev => prev.filter(e => !selectedIds.has(e.id)))
+      setSelectedIds(new Set())
+    } catch (err) {
+      alert('Failed to delete: ' + err.message)
+    }
+  }
+
   return (
     <div className="space-y-5">
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Delete ${selectedIds.size} Log${selectedIds.size > 1 ? 's' : ''}`}
+        message={`Permanently delete ${selectedIds.size} execution log${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={executeDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-5">
           <div className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Runs</div>
@@ -122,6 +166,23 @@ export default function Workflows() {
           {allAutomations.map(a => <option key={a} value={a}>{automationLabels[a] || a}</option>)}
         </select>
         <span className="text-sm text-slate-400 ml-auto">{filtered.length} executions</span>
+        {selectedIds.size > 0 && (
+          <>
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">{selectedIds.size} selected</span>
+            <button
+              onClick={() => setConfirmOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            >
+              <Trash2 size={14} /> Delete {selectedIds.size}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Clear
+            </button>
+          </>
+        )}
       </div>
 
       {loading ? (
@@ -134,7 +195,16 @@ export default function Workflows() {
             <table className="w-full min-w-max">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                  <th className="text-left px-5 py-3 font-medium">Status</th>
+                  <th className="px-5 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={el => { if (el) el.indeterminate = someSelected }}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium">Status</th>
                   <th className="text-left px-4 py-3 font-medium">Workflow</th>
                   <th className="text-left px-4 py-3 font-medium">Automation</th>
                   <th className="text-left px-4 py-3 font-medium">Contact</th>
@@ -148,13 +218,22 @@ export default function Workflows() {
                 {filtered.map(exec => {
                   const isExpanded = expanded === exec.id
                   const isError = exec.status === 'error'
+                  const isChecked = selectedIds.has(exec.id)
                   return (
                     <>
                       <tr
                         key={exec.id}
-                        className={`border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors ${isError ? 'bg-red-50/30 dark:bg-red-900/10' : ''}`}
+                        className={`border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors ${isError ? 'bg-red-50/30 dark:bg-red-900/10' : ''} ${isChecked ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
                       >
-                        <td className="px-5 py-3.5">
+                        <td className="px-5 py-3.5 w-10" onClick={e => toggleSelect(exec.id, e)}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-4 py-3.5">
                           {exec.status === 'success'
                             ? <CheckCircle size={18} className="text-emerald-500" />
                             : <XCircle size={18} className="text-red-500" />}
@@ -197,7 +276,7 @@ export default function Workflows() {
                       </tr>
                       {isExpanded && exec.notes && (
                         <tr key={`${exec.id}-detail`} className={`border-b border-slate-50 dark:border-slate-700 ${isError ? 'bg-red-50/50 dark:bg-red-900/10' : 'bg-slate-50 dark:bg-slate-700/30'}`}>
-                          <td colSpan={8} className="px-5 py-3">
+                          <td colSpan={9} className="px-5 py-3">
                             <div className="flex items-start gap-2">
                               {isError
                                 ? <XCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />

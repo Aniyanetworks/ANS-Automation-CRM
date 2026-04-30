@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2 } from 'lucide-react'
-import { getContacts, updateContact, createContact, deleteContact } from '../services/api'
+import { getContacts, updateContact, createContact, deleteContact, deleteContacts } from '../services/api'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const sourceColors = {
   Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -384,9 +385,12 @@ export default function Contacts() {
   const [creating, setCreating] = useState(false)
   const [sortKey, setSortKey] = useState('last_action_date')
   const [sortDir, setSortDir] = useState('desc')
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [confirmPending, setConfirmPending] = useState(null)
+  // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
 
-  // Handle navigation state from Header (Add Contact button, search, or suggestion click)
   const pendingContactId = useRef(null)
+
   useEffect(() => {
     if (location.state?.openCreate) {
       setCreating(true)
@@ -425,15 +429,33 @@ export default function Contacts() {
     setSelected(updated)
   }
 
-  async function handleDelete(contact) {
-    if (!confirm(`Delete ${contact.name}? This cannot be undone.`)) return
+  async function executeConfirmedDelete() {
+    if (!confirmPending) return
     try {
-      await deleteContact(contact.id)
-      setContacts(prev => prev.filter(c => c.id !== contact.id))
-      setSelected(null)
+      if (confirmPending.type === 'single') {
+        await deleteContact(confirmPending.contact.id)
+        setContacts(prev => prev.filter(c => c.id !== confirmPending.contact.id))
+        setSelected(null)
+      } else {
+        const ids = [...selectedIds]
+        await deleteContacts(ids)
+        setContacts(prev => prev.filter(c => !selectedIds.has(c.id)))
+        setSelectedIds(new Set())
+      }
     } catch (err) {
       alert('Failed to delete: ' + err.message)
+    } finally {
+      setConfirmPending(null)
     }
+  }
+
+  function toggleSelect(id, e) {
+    e.stopPropagation()
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
   const filtered = contacts
@@ -457,6 +479,17 @@ export default function Contacts() {
       return 0
     })
 
+  const allSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(c.id))
+  const someSelected = filtered.some(c => selectedIds.has(c.id)) && !allSelected
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(c => c.id)))
+    }
+  }
+
   function toggleSort(key) {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('asc') }
@@ -466,6 +499,13 @@ export default function Contacts() {
     if (sortKey !== col) return <ChevronDown size={13} className="text-slate-300 dark:text-slate-600" />
     return sortDir === 'asc' ? <ChevronUp size={13} className="text-blue-500" /> : <ChevronDown size={13} className="text-blue-500" />
   }
+
+  const confirmTitle = confirmPending?.type === 'bulk'
+    ? `Delete ${selectedIds.size} Contact${selectedIds.size > 1 ? 's' : ''}`
+    : 'Delete Contact'
+  const confirmMessage = confirmPending?.type === 'bulk'
+    ? `Permanently delete ${selectedIds.size} contact${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`
+    : `Delete ${confirmPending?.contact?.name}? This cannot be undone.`
 
   const allStatuses = [...new Set(contacts.map(c => c.lead_status).filter(Boolean))]
   const allSources = [...new Set(contacts.map(c => c.source).filter(Boolean))]
@@ -485,6 +525,15 @@ export default function Contacts() {
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={!!confirmPending}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmLabel="Delete"
+        onConfirm={executeConfirmedDelete}
+        onCancel={() => setConfirmPending(null)}
+      />
+
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -508,6 +557,23 @@ export default function Contacts() {
           {allStatuses.map(s => <option key={s}>{s}</option>)}
         </select>
         <span className="text-sm text-slate-400">{filtered.length} contacts</span>
+        {selectedIds.size > 0 && (
+          <>
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">{selectedIds.size} selected</span>
+            <button
+              onClick={() => setConfirmPending({ type: 'bulk' })}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            >
+              <Trash2 size={14} /> Delete {selectedIds.size}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              Clear
+            </button>
+          </>
+        )}
         <button
           onClick={() => setCreating(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex-shrink-0"
@@ -521,7 +587,16 @@ export default function Contacts() {
           <table className="w-full min-w-max">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                <th className="text-left px-5 py-3 font-medium cursor-pointer hover:text-slate-700 dark:hover:text-slate-300" onClick={() => toggleSort('name')}>
+                <th className="px-5 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={el => { if (el) el.indeterminate = someSelected }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                </th>
+                <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-slate-700 dark:hover:text-slate-300" onClick={() => toggleSort('name')}>
                   <div className="flex items-center gap-1">Name <SortIcon col="name" /></div>
                 </th>
                 <th className="text-left px-4 py-3 font-medium">Source</th>
@@ -538,13 +613,22 @@ export default function Contacts() {
               {filtered.map(c => {
                 const initials = c.avatar || getInitials(c.name)
                 const avatarColor = c.avatar_color || getAvatarColor(c.name)
+                const isChecked = selectedIds.has(c.id)
                 return (
                   <tr
                     key={c.id}
-                    className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 cursor-pointer transition-colors group"
+                    className={`border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/40 cursor-pointer transition-colors group ${isChecked ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
                     onClick={() => setSelected(c)}
                   >
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-3.5 w-10" onClick={e => toggleSelect(c.id, e)}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <div className={`w-8 h-8 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
                           {initials}
@@ -597,7 +681,7 @@ export default function Contacts() {
           contact={selected}
           onClose={() => setSelected(null)}
           onEdit={() => setEditing(true)}
-          onDelete={() => handleDelete(selected)}
+          onDelete={() => setConfirmPending({ type: 'single', contact: selected })}
         />
       )}
       {selected && editing && (
