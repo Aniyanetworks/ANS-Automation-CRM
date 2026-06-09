@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # vite 8 requires Node 20.19+ / 22.12+; Netlify's default can be older.
+  NODE_VERSION = "22"
+
+# SPA fallback (also covered by public/_redirects).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
