@@ -186,6 +186,112 @@ export async function getFollowUpSequenceContacts() {
   return data
 }
 
+// ─── EMAIL AUTOMATION ────────────────────────────────────────────────────────
+
+export async function getEmailCampaigns() {
+  const { data, error } = await supabase
+    .from('email_campaigns')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createEmailCampaign(campaign) {
+  const { data, error } = await supabase
+    .from('email_campaigns')
+    .insert(campaign)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateEmailCampaign(id, updates) {
+  const { data, error } = await supabase
+    .from('email_campaigns')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteEmailCampaign(id) {
+  const { error } = await supabase
+    .from('email_campaigns')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function getEmailSteps(campaignId) {
+  const { data, error } = await supabase
+    .from('email_steps')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .order('step_number', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function createEmailStep(step) {
+  const { data, error } = await supabase
+    .from('email_steps')
+    .insert(step)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateEmailStep(id, updates) {
+  const { data, error } = await supabase
+    .from('email_steps')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteEmailStep(id) {
+  const { error } = await supabase
+    .from('email_steps')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function getEmailLeads(campaignId) {
+  const { data, error } = await supabase
+    .from('email_leads')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createEmailLeads(leads) {
+  const { data, error } = await supabase
+    .from('email_leads')
+    .insert(leads)
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function deleteEmailLead(id) {
+  const { error } = await supabase
+    .from('email_leads')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
 // ─── SEARCH SUGGESTIONS ──────────────────────────────────────────────────────
 
 export async function searchContacts(query) {

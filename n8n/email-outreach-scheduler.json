@@ -1,0 +1,664 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4a01-9001-000000000001",
+      "name": "Check Every 15 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -2656,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_steps",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "*"
+            },
+            {
+              "name": "order",
+              "value": "step_number.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4a02-9002-000000000002",
+      "name": "Get All Steps",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2432,
+        848
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_campaigns",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.Active"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4a03-9003-000000000003",
+      "name": "Get Campaigns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2208,
+        848
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.Active"
+            },
+            {
+              "name": "replied",
+              "value": "eq.false"
+            },
+            {
+              "name": "next_send_at",
+              "value": "=lte.{{ $now.toISO() }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-4a04-9004-000000000004",
+      "name": "Get Due Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1984,
+        848
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const leads = $input.first().json;\nif (!Array.isArray(leads)) return [{ json: leads }];\nif (leads.length === 0) return [];\nreturn leads.map(l => ({ json: l }));"
+      },
+      "id": "a1b2c3d4-0005-4a05-9005-000000000005",
+      "name": "Split Leads",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1760,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const lead = $json;\nconst steps = $('Get All Steps').all().map(i => i.json);\nconst campaigns = $('Get Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === lead.campaign_id);\nconst now = new Date();\nconst base = { ...lead, lead_id: lead.id, nowISO: now.toISOString(), shouldSend: false, markComplete: false };\n// Campaign is paused or not found -> do nothing (no send, no complete).\nif (!campaign) { return base; }\nconst curr = lead.current_step == null ? 0 : Number(lead.current_step);\nconst step = steps.find(s => s.campaign_id === lead.campaign_id && Number(s.step_number) === curr);\n// No step at this index -> the sequence is finished.\nif (!step) { return { ...base, markComplete: true }; }\n// Step exists but has no content yet -> skip without advancing (will retry next tick once filled).\nconst hasContent = String(step.subject || '').trim() !== '' || String(step.body || '').trim() !== '';\nif (!hasContent) { return base; }\nconst fill = (t) => (t || '')\n  .split('{{name}}').join(lead.name || 'there')\n  .split('{{email}}').join(lead.email || '')\n  .split('{{service}}').join(lead.service || '');\nconst next = steps.find(s => s.campaign_id === lead.campaign_id && Number(s.step_number) === curr + 1);\nlet nextSendAt, newStatus;\nif (next) {\n  nextSendAt = new Date(now.getTime() + (Number(next.delay_days) || 0) * 86400000).toISOString();\n  newStatus = 'Active';\n} else {\n  nextSendAt = now.toISOString();\n  newStatus = 'Completed';\n}\nreturn {\n  ...lead,\n  shouldSend: true,\n  markComplete: false,\n  lead_id: lead.id,\n  to: lead.email,\n  toName: lead.name,\n  fromName: campaign.from_name || '',\n  subject: fill(step.subject),\n  body: fill(step.body),\n  step_number: curr,\n  nextStep: curr + 1,\n  nextSendAt,\n  newStatus,\n  emailsSent: (Number(lead.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
+      },
+      "id": "a1b2c3d4-0006-4a06-9006-000000000006",
+      "name": "Resolve & Personalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1536,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldSend }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0007-4a07-9007-000000000007",
+      "name": "Is Send Due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1312,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-0008-4a08-9008-000000000008",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -1056,
+        736
+      ],
+      "webhookId": "b1c2d3e4-0008-4b08-9b08-000000000008",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "5m7tLE66Mg5tj0xf",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads?id=eq.{{ $('Resolve & Personalize').item.json.lead_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "current_step",
+              "value": "={{ $('Resolve & Personalize').item.json.nextStep }}"
+            },
+            {
+              "name": "next_send_at",
+              "value": "={{ $('Resolve & Personalize').item.json.nextSendAt }}"
+            },
+            {
+              "name": "last_sent_at",
+              "value": "={{ $('Resolve & Personalize').item.json.nowISO }}"
+            },
+            {
+              "name": "emails_sent",
+              "value": "={{ $('Resolve & Personalize').item.json.emailsSent }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $('Resolve & Personalize').item.json.newStatus }}"
+            },
+            {
+              "name": "thread_id",
+              "value": "={{ $json.threadId }}"
+            },
+            {
+              "name": "message_id",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0009-4a09-9009-000000000009",
+      "name": "Advance Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -832,
+        736
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "lead_id",
+              "value": "={{ $('Resolve & Personalize').item.json.lead_id }}"
+            },
+            {
+              "name": "direction",
+              "value": "outbound"
+            },
+            {
+              "name": "subject",
+              "value": "={{ $('Resolve & Personalize').item.json.subject }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Resolve & Personalize').item.json.body }}"
+            },
+            {
+              "name": "step_number",
+              "value": "={{ $('Resolve & Personalize').item.json.step_number }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0010-4a10-9010-000000000010",
+      "name": "Save Outbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -608,
+        736
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/workflow_executions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "workflow_name",
+              "value": "Email Outreach — Scheduler"
+            },
+            {
+              "name": "automation",
+              "value": "Email"
+            },
+            {
+              "name": "contact_name",
+              "value": "={{ $('Resolve & Personalize').item.json.toName }}"
+            },
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "trigger",
+              "value": "scheduler"
+            },
+            {
+              "name": "notes",
+              "value": "={{ 'EMAIL_' + $('Resolve & Personalize').item.json.step_number + ' via Email' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0011-4a11-9011-000000000011",
+      "name": "Log Execution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -384,
+        736
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.markComplete }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0013-4a13-9013-000000000013",
+      "name": "Should Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1056,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads?id=eq.{{ $json.lead_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "Completed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0012-4a12-9012-000000000012",
+      "name": "Mark Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -832,
+        1040
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Check Every 15 Min": {
+      "main": [
+        [
+          {
+            "node": "Get All Steps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Steps": {
+      "main": [
+        [
+          {
+            "node": "Get Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Campaigns": {
+      "main": [
+        [
+          {
+            "node": "Get Due Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Due Leads": {
+      "main": [
+        [
+          {
+            "node": "Split Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Leads": {
+      "main": [
+        [
+          {
+            "node": "Resolve & Personalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve & Personalize": {
+      "main": [
+        [
+          {
+            "node": "Is Send Due?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Send Due?": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Should Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Advance Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advance Lead": {
+      "main": [
+        [
+          {
+            "node": "Save Outbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Outbound": {
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Complete?": {
+      "main": [
+        [
+          {
+            "node": "Mark Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "5ed296676961c5ed41c639e1683078855c8f50e4c5aa1466963b063405345b3e"
+  }
+}

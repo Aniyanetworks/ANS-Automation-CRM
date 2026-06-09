@@ -11,6 +11,7 @@ import Followups from './pages/Followups'
 import Workflows from './pages/Workflows'
 import Pipelines from './pages/Pipelines'
 import Automations from './pages/Automations'
+import EmailCampaigns from './pages/EmailCampaigns'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="workflows"   element={<Workflows />} />
         <Route path="pipelines"   element={<Pipelines />} />
         <Route path="automations" element={<Automations />} />
+        <Route path="email-campaigns" element={<EmailCampaigns />} />
       </Route>
     </Routes>
   )

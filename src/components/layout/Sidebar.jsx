@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, MessageSquare, CalendarDays,
-  Activity, Zap, Layers, Settings, Bot, X, LogOut,
+  Activity, Zap, Layers, Settings, Bot, X, LogOut, Mail,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/contacts', icon: Users, label: 'Contacts' },
   { to: '/chat-history', icon: MessageSquare, label: 'Chat History' },
   { to: '/followups', icon: CalendarDays, label: 'Follow-ups' },
+  { to: '/email-campaigns', icon: Mail, label: 'Email Campaigns' },
   { to: '/pipelines', icon: Layers, label: 'Pipelines' },
   { to: '/workflows', icon: Activity, label: 'Workflow Logs' },
   { to: '/automations', icon: Zap, label: 'Automations' },

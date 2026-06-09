@@ -1,0 +1,538 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {},
+        "options": {}
+      },
+      "id": "0293e531-c5e6-468d-a4cb-8176952bd486",
+      "name": "Email Reply Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        -160
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "5m7tLE66Mg5tj0xf",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const m = $json;\nlet fromRaw = m.from || m.From || (m.headers && m.headers.from) || '';\n// Gmail may return 'from' as an object: { value: [{ address, name }], text }\nif (fromRaw && typeof fromRaw === 'object') {\n  if (Array.isArray(fromRaw.value) && fromRaw.value[0] && fromRaw.value[0].address) {\n    fromRaw = fromRaw.value[0].address;\n  } else {\n    fromRaw = fromRaw.text || fromRaw.address || '';\n  }\n}\nfromRaw = String(fromRaw);\nconst match = fromRaw.match(/<([^>]+)>/);\nconst email = (match ? match[1] : fromRaw).trim().toLowerCase();\nconst body = m.text || m.textPlain || m.snippet || '';\nreturn {\n  fromEmail: email,\n  subject: String(m.subject || ''),\n  body: String(body || ''),\n  threadId: m.threadId || '',\n  messageId: m.id || ''\n};"
+      },
+      "id": "92035dce-f983-4b7c-bd1f-d46859bbeccb",
+      "name": "Extract Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "email",
+              "value": "=ilike.{{ $json.fromEmail }}"
+            },
+            {
+              "name": "status",
+              "value": "=neq.Unsubscribed"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "45edee37-e40b-4288-8f4f-506d73cbd103",
+      "name": "Find Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Works whether Find Lead returns the array wrapped in one item's json,\n// or split into one item per row.\nconst items = $input.all();\nlet lead = null;\nfor (const it of items) {\n  const v = it.json;\n  if (Array.isArray(v)) { if (v.length) { lead = v[0]; break; } }\n  else if (v && (v.id || v.email)) { lead = v; break; }\n}\nif (!lead) return [];\nreturn [{ json: lead }];"
+      },
+      "id": "529960a4-53b3-4a08-949e-c86d038929e4",
+      "name": "Pick Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads?id=eq.{{ $json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replied",
+              "value": "true"
+            },
+            {
+              "name": "status",
+              "value": "Replied"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "89fafa3c-dca9-492b-82ce-d412a0777bbb",
+      "name": "Stop Follow-ups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_campaigns",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "=eq.{{ $('Pick Lead').item.json.campaign_id }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1617958e-b4a6-4321-849b-7d27d17a4b75",
+      "name": "Get Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Extract Reply').item.json.body }}",
+        "options": {
+          "systemMessage": "={{ ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'You are a helpful sales assistant. Reply warmly and concisely.') + '\\n\\n--- Lead context ---\\nName: ' + ($('Pick Lead').item.json.name || '') + '\\nEmail: ' + ($('Pick Lead').item.json.email || '') + '\\nService of interest: ' + ($('Pick Lead').item.json.service || '') + '\\n\\nThe user message is the lead\\'s email reply. Write a helpful, concise reply as the email body only. No subject line, no signature placeholder.' }}"
+        }
+      },
+      "id": "5d9ec7b8-1ca0-4e5a-ace0-40653077ad47",
+      "name": "AI Draft Reply",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1808,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "f3b1a2c4-1111-4a22-9b33-444455556666",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        64
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "REPLACE_OPENAI_CRED",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Email Reply Trigger').item.json.id }}",
+        "emailType": "text",
+        "message": "={{ $json.output }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "ac5f6e14-5022-4690-8a2d-728aa6c13749",
+      "name": "Send Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2080,
+        -160
+      ],
+      "webhookId": "d1e2f3a4-0008-4d08-9d08-000000000008",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "5m7tLE66Mg5tj0xf",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "lead_id",
+              "value": "={{ $('Pick Lead').item.json.id }}"
+            },
+            {
+              "name": "direction",
+              "value": "inbound"
+            },
+            {
+              "name": "subject",
+              "value": "={{ $('Extract Reply').item.json.subject }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Extract Reply').item.json.body }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "233e98b1-9a42-48df-b968-5f55b1139354",
+      "name": "Save Inbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2304,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/workflow_executions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "workflow_name",
+              "value": "Email Reply — AI Responder"
+            },
+            {
+              "name": "automation",
+              "value": "Email"
+            },
+            {
+              "name": "contact_name",
+              "value": "={{ $('Pick Lead').item.json.name }}"
+            },
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "trigger",
+              "value": "gmail_reply"
+            },
+            {
+              "name": "notes",
+              "value": "REPLY via Email — follow-ups stopped, AI replied"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "290a5ee8-b29b-4f66-8970-8d3823bbfcce",
+      "name": "Log Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2528,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Email Reply Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Reply": {
+      "main": [
+        [
+          {
+            "node": "Find Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Lead": {
+      "main": [
+        [
+          {
+            "node": "Pick Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Lead": {
+      "main": [
+        [
+          {
+            "node": "Stop Follow-ups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stop Follow-ups": {
+      "main": [
+        [
+          {
+            "node": "Get Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Campaign": {
+      "main": [
+        [
+          {
+            "node": "AI Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Draft Reply",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Draft Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reply": {
+      "main": [
+        [
+          {
+            "node": "Save Inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Inbound": {
+      "main": [
+        [
+          {
+            "node": "Log Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5ed296676961c5ed41c639e1683078855c8f50e4c5aa1466963b063405345b3e"
+  }
+}

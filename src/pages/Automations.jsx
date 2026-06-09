@@ -51,6 +51,15 @@ const AUTOMATION_CONFIG = [
     trigger: 'Webhook',
   },
   {
+    id: 'email-outreach',
+    name: 'Email Outreach & AI Replies',
+    type: 'Email',
+    description: 'Scheduled cold-email campaigns with multi-step follow-ups. Auto-stops on reply and an AI agent drafts the response. Managed from the Email Campaigns page.',
+    webhook: '',
+    workflowNames: ['Email Outreach — Scheduler', 'Email Reply — AI Responder'],
+    trigger: 'Schedule + Gmail',
+  },
+  {
     id: 'follow-up',
     name: 'Lead Nurture Sequence',
     type: 'FollowUp',
@@ -72,6 +81,7 @@ const automationIcons = {
   Website: Globe,
   Facebook: Facebook,
   SMS: MessageCircle,
+  Email: Mail,
   FollowUp: RefreshCw,
 }
 
@@ -79,6 +89,7 @@ const gradients = {
   Website: 'from-blue-500 to-cyan-500',
   Facebook: 'from-indigo-600 to-blue-600',
   SMS: 'from-teal-500 to-emerald-500',
+  Email: 'from-purple-500 to-fuchsia-500',
   FollowUp: 'from-amber-500 to-orange-500',
 }
 
@@ -86,6 +97,7 @@ const cardBorders = {
   Website: 'border-blue-200 dark:border-blue-800',
   Facebook: 'border-indigo-200 dark:border-indigo-800',
   SMS: 'border-teal-200 dark:border-teal-800',
+  Email: 'border-purple-200 dark:border-purple-800',
   FollowUp: 'border-amber-200 dark:border-amber-800',
 }
 
