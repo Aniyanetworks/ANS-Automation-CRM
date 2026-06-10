@@ -292,6 +292,56 @@ export async function deleteEmailLead(id) {
   if (error) throw error
 }
 
+// ─── CLIENT NURTURE ──────────────────────────────────────────────────────────
+
+export async function getNurtureCampaigns() {
+  const { data, error } = await supabase
+    .from('email_campaigns')
+    .select('*')
+    .eq('type', 'nurture')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getNurtureClients(campaignId) {
+  const { data, error } = await supabase
+    .from('nurture_clients')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createNurtureClients(clients) {
+  const { data, error } = await supabase
+    .from('nurture_clients')
+    .insert(clients)
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function updateNurtureClient(id, updates) {
+  const { data, error } = await supabase
+    .from('nurture_clients')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteNurtureClient(id) {
+  const { error } = await supabase
+    .from('nurture_clients')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
 // ─── SEARCH SUGGESTIONS ──────────────────────────────────────────────────────
 
 export async function searchContacts(query) {

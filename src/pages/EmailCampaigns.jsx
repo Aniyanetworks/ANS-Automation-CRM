@@ -1,40 +1,61 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Mail, Plus, X, Loader2, Trash2, Users, Send, ChevronRight,
-  Clock, CheckCircle, MessageSquareReply, Pause, Play, Sparkles, Save, Upload,
+  Clock, CheckCircle, MessageSquareReply, Pause, Play, Sparkles, Save, Upload, Heart,
 } from 'lucide-react'
 import {
   getEmailCampaigns, createEmailCampaign, updateEmailCampaign, deleteEmailCampaign,
   getEmailSteps, createEmailStep, updateEmailStep, deleteEmailStep,
   getEmailLeads, createEmailLeads, deleteEmailLead,
+  getNurtureClients, updateNurtureClient, deleteNurtureClient,
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
 
 const leadStatusColors = {
-  Active:       'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  Replied:      'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  Completed:    'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  Active: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+  Replied: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+  Completed: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
   Unsubscribed: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
-  Error:        'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  Error: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
 }
 
 const DEFAULT_PROMPT = `You are a helpful sales assistant for Aniya Network Solutions. A lead has replied to our outreach email. Reply warmly and professionally, answer their question, and gently steer toward booking a call. Keep it short (2-4 sentences).`
 
+const DEFAULT_NURTURE_PROMPT = `You are writing on behalf of Aniya Network Solutions to a PAST client. Write a warm, genuine relationship check-in: ask how they and their business are doing, and reference our past work together using the note provided. This is NOT a sales pitch — never promote services, pricing, or ask for new business. Keep it short, personal, and human (3-5 sentences).`
+
 // ── Create Campaign Modal ─────────────────────────────────────────────────────
 
 function CampaignModal({ onClose, onCreate }) {
-  const [form, setForm] = useState({ name: '', from_name: '', from_email: '', ai_reply_prompt: DEFAULT_PROMPT })
+  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, ai_reply_prompt: DEFAULT_PROMPT })
   const [saving, setSaving] = useState(false)
+
+  const isNurture = form.type === 'nurture'
+
+  function setType(type) {
+    setForm(f => {
+      // Swap the default prompt when switching type, unless the user already edited it.
+      const wasDefault = f.ai_reply_prompt === DEFAULT_PROMPT || f.ai_reply_prompt === DEFAULT_NURTURE_PROMPT || !f.ai_reply_prompt.trim()
+      return {
+        ...f,
+        type,
+        ai_reply_prompt: wasDefault ? (type === 'nurture' ? DEFAULT_NURTURE_PROMPT : DEFAULT_PROMPT) : f.ai_reply_prompt,
+      }
+    })
+  }
 
   async function submit(e) {
     e.preventDefault()
     if (!form.name.trim()) return
     setSaving(true)
     try {
-      // Start Paused so nothing sends until the sequence + leads are reviewed and the user clicks Resume.
-      const created = await createEmailCampaign({ ...form, status: 'Paused' })
+      // Outreach starts Paused (review the sequence first); Nurture starts Active (first touch is a month out anyway).
+      const created = await createEmailCampaign({
+        ...form,
+        interval_days: Number(form.interval_days) || 30,
+        status: isNurture ? 'Active' : 'Paused',
+      })
       onCreate(created)
       onClose()
     } catch (err) {
@@ -55,8 +76,24 @@ function CampaignModal({ onClose, onCreate }) {
         </div>
         <form onSubmit={submit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Campaign Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setType('outreach')} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${!isNurture ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <Send size={15} /> Sales Outreach
+              </button>
+              <button type="button" onClick={() => setType('nurture')} className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${isNurture ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+                <Heart size={15} /> Client Nurture
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">
+              {isNurture
+                ? 'Recurring relationship check-ins to past clients. Enroll them from the Contacts page.'
+                : 'Cold-email sequence with scheduled follow-ups. Add leads on this page.'}
+            </p>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Campaign Name <span className="text-red-400">*</span></label>
-            <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Q3 Web Design Outreach" className={inputCls} />
+            <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={isNurture ? 'e.g. Past Clients — Monthly Check-in' : 'e.g. Q3 Web Design Outreach'} className={inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -68,12 +105,19 @@ function CampaignModal({ onClose, onCreate }) {
               <input type="email" value={form.from_email} onChange={e => setForm(f => ({ ...f, from_email: e.target.value }))} placeholder="hello@aniyanetworks.net" className={inputCls} />
             </div>
           </div>
+          {isNurture && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Check-in every (days)</label>
+              <input type="number" min="1" value={form.interval_days} onChange={e => setForm(f => ({ ...f, interval_days: e.target.value }))} className={inputCls} />
+              <p className="text-xs text-slate-400 mt-1">First check-in fires this many days after a client is enrolled, then repeats. 30 = monthly.</p>
+            </div>
+          )}
           <div>
             <label className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
-              <Sparkles size={12} className="text-violet-500" /> AI Reply Prompt
+              <Sparkles size={12} className="text-violet-500" /> {isNurture ? 'AI Check-in Prompt (tone & rules)' : 'AI Reply Prompt'}
             </label>
             <textarea value={form.ai_reply_prompt} onChange={e => setForm(f => ({ ...f, ai_reply_prompt: e.target.value }))} rows={4} className={`${inputCls} resize-none`} />
-            <p className="text-xs text-slate-400 mt-1">Used by the AI agent to reply when a lead responds.</p>
+            <p className="text-xs text-slate-400 mt-1">{isNurture ? 'Guides the AI when writing each monthly check-in, using the client note.' : 'Used by the AI agent to reply when a lead responds.'}</p>
           </div>
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
@@ -347,6 +391,161 @@ function StepRow({ step, index, onSave, onDelete }) {
         >
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
         </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Nurture Campaign Detail ───────────────────────────────────────────────────
+
+function NurtureDetail({ campaign, onUpdated }) {
+  const [clients, setClients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [confirmClient, setConfirmClient] = useState(null)
+  const [prompt, setPrompt] = useState(campaign.ai_reply_prompt || '')
+  const [interval, setIntervalDays] = useState(campaign.interval_days ?? 30)
+  const [savingSettings, setSavingSettings] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    setPrompt(campaign.ai_reply_prompt || '')
+    setIntervalDays(campaign.interval_days ?? 30)
+    getNurtureClients(campaign.id)
+      .then(setClients)
+      .catch(e => alert('Failed to load clients: ' + e.message))
+      .finally(() => setLoading(false))
+  }, [campaign.id])
+
+  const settingsDirty = prompt !== (campaign.ai_reply_prompt || '') || Number(interval) !== (campaign.interval_days ?? 30)
+
+  async function saveSettings() {
+    setSavingSettings(true)
+    try {
+      onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_prompt: prompt, interval_days: Number(interval) || 30 }))
+    } catch (e) { alert('Failed to save: ' + e.message) } finally { setSavingSettings(false) }
+  }
+
+  async function toggleCampaign() {
+    const next = campaign.status === 'Active' ? 'Paused' : 'Active'
+    try { onUpdated(await updateEmailCampaign(campaign.id, { status: next })) }
+    catch (e) { alert('Failed: ' + e.message) }
+  }
+
+  async function toggleClient(c) {
+    const next = c.status === 'Active' ? 'Paused' : 'Active'
+    try {
+      const updated = await updateNurtureClient(c.id, { status: next })
+      setClients(prev => prev.map(x => x.id === c.id ? updated : x))
+    } catch (e) { alert('Failed: ' + e.message) }
+  }
+
+  async function removeClient() {
+    if (!confirmClient) return
+    try {
+      await deleteNurtureClient(confirmClient.id)
+      setClients(prev => prev.filter(x => x.id !== confirmClient.id))
+    } catch (e) { alert('Failed: ' + e.message) } finally { setConfirmClient(null) }
+  }
+
+  const active = clients.filter(c => c.status === 'Active').length
+  const totalSent = clients.reduce((s, c) => s + (c.emails_sent || 0), 0)
+
+  return (
+    <div className="space-y-5">
+      <ConfirmDialog
+        open={!!confirmClient}
+        title="Remove Client"
+        message={`Remove ${confirmClient?.name || confirmClient?.email} from this nurture campaign?`}
+        confirmLabel="Remove"
+        onConfirm={removeClient}
+        onCancel={() => setConfirmClient(null)}
+      />
+
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Heart size={18} className="text-rose-500" /> {campaign.name}
+          </h2>
+          <p className="text-sm text-slate-400 mt-0.5">Client relationship nurture · every {campaign.interval_days ?? 30} days · {campaign.from_name || 'no sender name'}</p>
+        </div>
+        <button
+          onClick={toggleCampaign}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${campaign.status === 'Active' ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300'}`}
+        >
+          {campaign.status === 'Active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
+          <div className="text-2xl font-bold text-slate-900 dark:text-white">{clients.length}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Clients</div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
+          <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">{active}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Active</div>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
+          <div className="text-2xl font-bold text-slate-700 dark:text-slate-300">{totalSent}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Check-ins Sent</div>
+        </div>
+      </div>
+
+      {/* Settings */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Sparkles size={15} className="text-violet-500" /> Check-in Settings</h3>
+          <button onClick={saveSettings} disabled={!settingsDirty || savingSettings} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors">
+            {savingSettings ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
+          </button>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Check-in every (days)</label>
+          <input type="number" min="1" value={interval} onChange={e => setIntervalDays(e.target.value)} className={`${inputCls} max-w-32`} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">AI Check-in Prompt</label>
+          <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={4} className={`${inputCls} resize-none`} />
+        </div>
+      </div>
+
+      {/* Clients */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Users size={15} className="text-rose-500" /> Enrolled Clients</h3>
+          <span className="text-xs text-slate-400">Add from the Contacts page → select → “Add to Nurture”</span>
+        </div>
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 size={22} className="animate-spin mr-2" /> Loading...</div>
+          ) : clients.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 text-sm">No clients enrolled yet. Add them from the Contacts page.</div>
+          ) : (
+            <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-[32rem] overflow-y-auto">
+              {clients.map(c => (
+                <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name || c.email}</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'Active' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{c.status}</span>
+                    </div>
+                    <div className="text-xs text-slate-400 truncate">{c.email}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0 hidden sm:block">
+                    <div className="text-xs text-slate-500 dark:text-slate-300">{c.emails_sent || 0} sent</div>
+                    <div className="text-xs text-slate-400">next {c.next_send_at ? new Date(c.next_send_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}</div>
+                  </div>
+                  <button onClick={() => toggleClient(c)} title={c.status === 'Active' ? 'Pause' : 'Resume'} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    {c.status === 'Active' ? <Pause size={13} /> : <Play size={13} />}
+                  </button>
+                  <button onClick={() => setConfirmClient(c)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -636,12 +835,12 @@ export default function EmailCampaigns() {
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${c.status === 'Active' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
-                    <Mail size={15} />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${c.type === 'nurture' ? (c.status === 'Active' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400') : (c.status === 'Active' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400')}`}>
+                    {c.type === 'nurture' ? <Heart size={15} /> : <Mail size={15} />}
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</div>
-                    <div className="text-xs text-slate-400">{c.status}</div>
+                    <div className="text-xs text-slate-400">{c.type === 'nurture' ? 'Nurture' : 'Outreach'} · {c.status}</div>
                   </div>
                 </div>
                 <span
@@ -659,7 +858,9 @@ export default function EmailCampaigns() {
       {/* Detail */}
       <div className="flex-1 min-w-0">
         {selected ? (
-          <CampaignDetail campaign={selected} onUpdated={handleUpdated} />
+          selected.type === 'nurture'
+            ? <NurtureDetail campaign={selected} onUpdated={handleUpdated} />
+            : <CampaignDetail campaign={selected} onUpdated={handleUpdated} />
         ) : (
           <div className="flex flex-col items-center justify-center h-64 text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
             <Mail size={32} className="opacity-30 mb-2" />

@@ -1,169 +1,25 @@
 {
+  "name": "Client Nurture — Monthly Check-in",
   "nodes": [
     {
       "parameters": {
-        "pollTimes": {
-          "item": [
+        "rule": {
+          "interval": [
             {
-              "mode": "everyMinute"
+              "field": "minutes",
+              "minutesInterval": 10
             }
           ]
-        },
-        "simple": false,
-        "filters": {},
-        "options": {}
-      },
-      "id": "0293e531-c5e6-468d-a4cb-8176952bd486",
-      "name": "Email Reply Trigger",
-      "type": "n8n-nodes-base.gmailTrigger",
-      "typeVersion": 1.2,
-      "position": [
-        480,
-        -160
-      ],
-      "credentials": {
-        "gmailOAuth2": {
-          "id": "5m7tLE66Mg5tj0xf",
-          "name": "Gmail account"
         }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const m = $json;\nlet fromRaw = m.from || m.From || (m.headers && m.headers.from) || '';\n// Gmail may return 'from' as an object: { value: [{ address, name }], text }\nif (fromRaw && typeof fromRaw === 'object') {\n  if (Array.isArray(fromRaw.value) && fromRaw.value[0] && fromRaw.value[0].address) {\n    fromRaw = fromRaw.value[0].address;\n  } else {\n    fromRaw = fromRaw.text || fromRaw.address || '';\n  }\n}\nfromRaw = String(fromRaw);\nconst match = fromRaw.match(/<([^>]+)>/);\nconst email = (match ? match[1] : fromRaw).trim().toLowerCase();\nconst body = m.text || m.textPlain || m.snippet || '';\nreturn {\n  fromEmail: email,\n  subject: String(m.subject || ''),\n  body: String(body || ''),\n  threadId: m.threadId || '',\n  messageId: m.id || ''\n};"
       },
-      "id": "92035dce-f983-4b7c-bd1f-d46859bbeccb",
-      "name": "Extract Reply",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "e1f2a3b4-0001-4e01-9e01-000000000001",
+      "name": "Check Every 10 Min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
       "position": [
-        704,
-        -160
+        -2656,
+        848
       ]
-    },
-    {
-      "parameters": {
-        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "email",
-              "value": "=ilike.{{ $json.fromEmail }}"
-            },
-            {
-              "name": "status",
-              "value": "=neq.Unsubscribed"
-            },
-            {
-              "name": "select",
-              "value": "*"
-            },
-            {
-              "name": "limit",
-              "value": "1"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "45edee37-e40b-4288-8f4f-506d73cbd103",
-      "name": "Find Lead",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        928,
-        -160
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "SehDVTutwS7XzjTn",
-          "name": "Supabase ANS CRM"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Works whether Find Lead returns the array wrapped in one item's json,\n// or split into one item per row.\nconst items = $input.all();\nlet lead = null;\nfor (const it of items) {\n  const v = it.json;\n  if (Array.isArray(v)) { if (v.length) { lead = v[0]; break; } }\n  else if (v && (v.id || v.email)) { lead = v; break; }\n}\nif (!lead) return [];\nreturn [{ json: lead }];"
-      },
-      "id": "529960a4-53b3-4a08-949e-c86d038929e4",
-      "name": "Pick Lead",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1152,
-        -160
-      ]
-    },
-    {
-      "parameters": {
-        "method": "PATCH",
-        "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads?id=eq.{{ $json.id }}",
-        "authentication": "predefinedCredentialType",
-        "nodeCredentialType": "httpHeaderAuth",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Prefer",
-              "value": "return=representation"
-            }
-          ]
-        },
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "replied",
-              "value": "true"
-            },
-            {
-              "name": "status",
-              "value": "Replied"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "89fafa3c-dca9-492b-82ce-d412a0777bbb",
-      "name": "Stop Follow-ups",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1376,
-        -160
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "SehDVTutwS7XzjTn",
-          "name": "Supabase ANS CRM"
-        }
-      },
-      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -174,16 +30,16 @@
         "queryParameters": {
           "parameters": [
             {
-              "name": "id",
-              "value": "=eq.{{ $('Pick Lead').item.json.campaign_id }}"
+              "name": "type",
+              "value": "eq.nurture"
+            },
+            {
+              "name": "status",
+              "value": "eq.Active"
             },
             {
               "name": "select",
               "value": "*"
-            },
-            {
-              "name": "limit",
-              "value": "1"
             }
           ]
         },
@@ -202,13 +58,13 @@
         },
         "options": {}
       },
-      "id": "1617958e-b4a6-4321-849b-7d27d17a4b75",
-      "name": "Get Campaign",
+      "id": "e1f2a3b4-0002-4e02-9e02-000000000002",
+      "name": "Get Nurture Campaigns",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1600,
-        -160
+        -2432,
+        848
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -219,19 +75,118 @@
     },
     {
       "parameters": {
-        "promptType": "define",
-        "text": "={{ $('Extract Reply').item.json.body }}",
-        "options": {
-          "systemMessage": "={{ ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'You are a helpful sales assistant. Reply warmly and concisely.') + '\\n\\n--- Lead context ---\\nName: ' + ($('Pick Lead').item.json.name || '') + '\\nEmail: ' + ($('Pick Lead').item.json.email || '') + '\\nService of interest: ' + ($('Pick Lead').item.json.service || '') + '\\n\\nThe user message is the lead\\'s email reply. Write a helpful, concise reply as the email body only. No subject line, no signature placeholder.' }}"
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_clients",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.Active"
+            },
+            {
+              "name": "next_send_at",
+              "value": "=lte.{{ $now.toISO() }}"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1f2a3b4-0003-4e03-9e03-000000000003",
+      "name": "Get Due Clients",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2208,
+        848
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const clients = $input.first().json;\nif (!Array.isArray(clients)) return [{ json: clients }];\nif (clients.length === 0) return [];\nreturn clients.map(c => ({ json: c }));"
+      },
+      "id": "e1f2a3b4-0004-4e04-9e04-000000000004",
+      "name": "Split Clients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1984,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const client = $json;\nconst campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === client.campaign_id);\nconst now = new Date();\n// Campaign paused/missing -> skip (do not send, do not reschedule).\nif (!campaign) { return { ...client, shouldSend: false, client_id: client.id, nowISO: now.toISOString() }; }\nconst interval = Number(campaign.interval_days) || 30;\n// TESTING: reschedule 10 minutes out. PRODUCTION: new Date(now.getTime() + interval * 86400000)\nconst nextSendAt = new Date(now.getTime() + 10 * 60000).toISOString();\nconst firstName = (client.name || 'there').split(' ')[0];\nreturn {\n  ...client,\n  shouldSend: true,\n  client_id: client.id,\n  email: client.email,\n  name: client.name || '',\n  firstName,\n  note: client.note || '',\n  tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n  fromName: campaign.from_name || '',\n  subject: 'Hi ' + firstName + ', just checking in',\n  nextSendAt,\n  emailsSent: (Number(client.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
+      },
+      "id": "e1f2a3b4-0005-4e05-9e05-000000000005",
+      "name": "Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1760,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldSend }}",
+              "value2": true
+            }
+          ]
         }
       },
-      "id": "5d9ec7b8-1ca0-4e5a-ace0-40653077ad47",
-      "name": "AI Draft Reply",
+      "id": "e1f2a3b4-0006-4e06-9e06-000000000006",
+      "name": "Is Due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1536,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Write the relationship check-in email body now.",
+        "options": {
+          "systemMessage": "={{ $('Prepare').item.json.tone + '\\n\\n--- Client ---\\nName: ' + $('Prepare').item.json.name + '\\nOur history / notes: ' + ($('Prepare').item.json.note || '(none provided)') + '\\n\\nWrite ONLY the email body (no subject line, no placeholders). Warm, personal, 3-5 sentences. Ask how they and their business/family are doing and reference our past work together. This is a relationship check-in, NOT a sales pitch — do not promote services, pricing, or ask for new business.' }}"
+        }
+      },
+      "id": "e1f2a3b4-0007-4e07-9e07-000000000007",
+      "name": "Compose Check-in",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 1.7,
       "position": [
-        1808,
-        -160
+        -1280,
+        736
       ]
     },
     {
@@ -243,13 +198,13 @@
         },
         "options": {}
       },
-      "id": "f3b1a2c4-1111-4a22-9b33-444455556666",
+      "id": "e1f2a3b4-0008-4e08-9e08-000000000008",
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
       "position": [
-        1760,
-        64
+        -1320,
+        960
       ],
       "credentials": {
         "openAiApi": {
@@ -260,23 +215,23 @@
     },
     {
       "parameters": {
-        "operation": "reply",
-        "messageId": "={{ $('Email Reply Trigger').item.json.id }}",
+        "sendTo": "={{ $('Prepare').item.json.email }}",
+        "subject": "={{ $('Prepare').item.json.subject }}",
         "emailType": "text",
         "message": "={{ $json.output + '\\n\\nTake care,\\nManam Parvez\\nAniya Networks Solutions Inc.' }}",
         "options": {
           "appendAttribution": false
         }
       },
-      "id": "ac5f6e14-5022-4690-8a2d-728aa6c13749",
-      "name": "Send Reply",
+      "id": "e1f2a3b4-0009-4e09-9e09-000000000009",
+      "name": "Send Check-in",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
       "position": [
-        2080,
-        -160
+        -1040,
+        736
       ],
-      "webhookId": "d1e2f3a4-0008-4d08-9d08-000000000008",
+      "webhookId": "f1a2b3c4-0009-4f09-9f09-000000000009",
       "credentials": {
         "gmailOAuth2": {
           "id": "5m7tLE66Mg5tj0xf",
@@ -287,8 +242,8 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_messages",
+        "method": "PATCH",
+        "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_clients?id=eq.{{ $('Prepare').item.json.client_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -312,32 +267,36 @@
         "bodyParameters": {
           "parameters": [
             {
-              "name": "lead_id",
-              "value": "={{ $('Pick Lead').item.json.id }}"
+              "name": "next_send_at",
+              "value": "={{ $('Prepare').item.json.nextSendAt }}"
             },
             {
-              "name": "direction",
-              "value": "inbound"
+              "name": "last_sent_at",
+              "value": "={{ $('Prepare').item.json.nowISO }}"
             },
             {
-              "name": "subject",
-              "value": "={{ $('Extract Reply').item.json.subject }}"
+              "name": "emails_sent",
+              "value": "={{ $('Prepare').item.json.emailsSent }}"
             },
             {
-              "name": "body",
-              "value": "={{ $('Extract Reply').item.json.body }}"
+              "name": "last_message",
+              "value": "={{ $('Compose Check-in').item.json.output }}"
+            },
+            {
+              "name": "thread_id",
+              "value": "={{ $json.threadId }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "233e98b1-9a42-48df-b968-5f55b1139354",
-      "name": "Save Inbound",
+      "id": "e1f2a3b4-0010-4e10-9e10-000000000010",
+      "name": "Schedule Next",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2304,
-        -160
+        -816,
+        736
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -375,7 +334,7 @@
           "parameters": [
             {
               "name": "workflow_name",
-              "value": "Email Reply — AI Responder"
+              "value": "Client Nurture — Monthly Check-in"
             },
             {
               "name": "automation",
@@ -383,7 +342,7 @@
             },
             {
               "name": "contact_name",
-              "value": "={{ $('Pick Lead').item.json.name }}"
+              "value": "={{ $('Prepare').item.json.name }}"
             },
             {
               "name": "status",
@@ -391,23 +350,23 @@
             },
             {
               "name": "trigger",
-              "value": "gmail_reply"
+              "value": "scheduler"
             },
             {
               "name": "notes",
-              "value": "REPLY via Email — follow-ups stopped, AI replied"
+              "value": "={{ 'NURTURE check-in #' + $('Prepare').item.json.emailsSent + ' via Email' }}"
             }
           ]
         },
         "options": {}
       },
-      "id": "290a5ee8-b29b-4f66-8970-8d3823bbfcce",
-      "name": "Log Reply",
+      "id": "e1f2a3b4-0011-4e11-9e11-000000000011",
+      "name": "Log Execution",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2528,
-        -160
+        -592,
+        736
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -419,110 +378,111 @@
     }
   ],
   "connections": {
-    "Email Reply Trigger": {
+    "Check Every 10 Min": {
       "main": [
         [
           {
-            "node": "Extract Reply",
+            "node": "Get Nurture Campaigns",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract Reply": {
+    "Get Nurture Campaigns": {
       "main": [
         [
           {
-            "node": "Find Lead",
+            "node": "Get Due Clients",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Find Lead": {
+    "Get Due Clients": {
       "main": [
         [
           {
-            "node": "Pick Lead",
+            "node": "Split Clients",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Pick Lead": {
+    "Split Clients": {
       "main": [
         [
           {
-            "node": "Stop Follow-ups",
+            "node": "Prepare",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Stop Follow-ups": {
+    "Prepare": {
       "main": [
         [
           {
-            "node": "Get Campaign",
+            "node": "Is Due?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Campaign": {
+    "Is Due?": {
       "main": [
         [
           {
-            "node": "AI Draft Reply",
+            "node": "Compose Check-in",
             "type": "main",
             "index": 0
           }
-        ]
+        ],
+        []
       ]
     },
     "OpenAI Chat Model": {
       "ai_languageModel": [
         [
           {
-            "node": "AI Draft Reply",
+            "node": "Compose Check-in",
             "type": "ai_languageModel",
             "index": 0
           }
         ]
       ]
     },
-    "AI Draft Reply": {
+    "Compose Check-in": {
       "main": [
         [
           {
-            "node": "Send Reply",
+            "node": "Send Check-in",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Send Reply": {
+    "Send Check-in": {
       "main": [
         [
           {
-            "node": "Save Inbound",
+            "node": "Schedule Next",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Save Inbound": {
+    "Schedule Next": {
       "main": [
         [
           {
-            "node": "Log Reply",
+            "node": "Log Execution",
             "type": "main",
             "index": 0
           }

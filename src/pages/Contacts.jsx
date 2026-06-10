@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2 } from 'lucide-react'
-import { getContacts, updateContact, createContact, deleteContact, deleteContacts } from '../services/api'
+import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart } from 'lucide-react'
+import { getContacts, updateContact, createContact, deleteContact, deleteContacts, getNurtureCampaigns, createNurtureClients } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 
 const sourceColors = {
@@ -30,9 +30,10 @@ const statusColors = {
   'Booked': 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
   'Closed Won': 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
   'Closed Lost': 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  'Client': 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
 }
 
-const leadStatuses = ['New Lead', 'Contacted', 'Follow-Up', 'Interested', 'Booked', 'Closed Won', 'Closed Lost']
+const leadStatuses = ['New Lead', 'Contacted', 'Follow-Up', 'Interested', 'Booked', 'Closed Won', 'Closed Lost', 'Client']
 
 function getInitials(name) {
   if (!name) return '?'
@@ -54,6 +55,7 @@ function EditModal({ contact, onClose, onSave }) {
     interest: contact.interest || 'Pending',
     service_type: contact.service_type || '',
     summary: contact.summary || '',
+    client_note: contact.client_note || '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -116,6 +118,12 @@ function EditModal({ contact, onClose, onSave }) {
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Summary</label>
               <textarea value={form.summary} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))} rows={3} className={`${inputCls} resize-none`} />
             </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                <Heart size={12} className="text-rose-500" /> Client / Project Note
+              </label>
+              <textarea value={form.client_note} onChange={e => setForm(f => ({ ...f, client_note: e.target.value }))} rows={3} placeholder="Past work with us, project outcomes, anything to personalize relationship check-ins..." className={`${inputCls} resize-none`} />
+            </div>
           </div>
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
@@ -136,7 +144,7 @@ function CreateModal({ onClose, onCreate }) {
   const blankForm = {
     name: '', email: '', phone: '', source: 'Website',
     service_type: '', lead_status: 'New Lead', interest: 'Pending',
-    summary: '', message: '',
+    summary: '', message: '', client_note: '',
   }
   const [form, setForm] = useState(blankForm)
   const [saving, setSaving] = useState(false)
@@ -215,6 +223,12 @@ function CreateModal({ onClose, onCreate }) {
             <div className="col-span-2">
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Summary</label>
               <textarea value={form.summary} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))} rows={2} placeholder="Brief summary of this lead..." className={`${inputCls} resize-none`} />
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                <Heart size={12} className="text-rose-500" /> Client / Project Note
+              </label>
+              <textarea value={form.client_note} onChange={e => setForm(f => ({ ...f, client_note: e.target.value }))} rows={2} placeholder="Past work with us, project outcomes... (used for relationship check-ins)" className={`${inputCls} resize-none`} />
             </div>
           </div>
           <div className="flex gap-2 pt-2">
@@ -296,6 +310,13 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
             </div>
           )}
 
+          {contact.client_note && (
+            <div className="bg-rose-50 dark:bg-rose-900/15 border border-rose-100 dark:border-rose-900/30 rounded-xl p-4">
+              <div className="text-xs text-rose-500 dark:text-rose-400 font-medium mb-2 flex items-center gap-1"><Heart size={12} /> Client / Project Note</div>
+              <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{contact.client_note}</p>
+            </div>
+          )}
+
           {contact.last_message_sent && (
             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
               <div className="text-xs text-slate-400 font-medium mb-2">Last Message Sent</div>
@@ -369,6 +390,91 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
   )
 }
 
+function NurtureEnrollModal({ contacts, onClose, onDone }) {
+  const [campaigns, setCampaigns] = useState([])
+  const [campaignId, setCampaignId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getNurtureCampaigns()
+      .then(data => { setCampaigns(data); if (data.length) setCampaignId(data[0].id) })
+      .catch(e => alert('Failed to load nurture campaigns: ' + e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const withEmail = contacts.filter(c => c.email && c.email.trim())
+  const skipped = contacts.length - withEmail.length
+  const campaign = campaigns.find(c => c.id === campaignId)
+  const inputCls2 = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+
+  async function submit() {
+    if (!campaign || withEmail.length === 0) return
+    setSaving(true)
+    try {
+      // TESTING: first check-in 10 minutes after enrolment.
+      // PRODUCTION: const next = new Date(Date.now() + (Number(campaign.interval_days) || 30) * 86400000).toISOString()
+      const next = new Date(Date.now() + 10 * 60000).toISOString()
+      const rows = withEmail.map(c => ({
+        campaign_id: campaign.id,
+        contact_id: c.id,
+        name: c.name || '',
+        email: c.email,
+        note: c.client_note || '',
+        status: 'Active',
+        next_send_at: next,
+        emails_sent: 0,
+      }))
+      await createNurtureClients(rows)
+      onDone(withEmail.length)
+      onClose()
+    } catch (e) {
+      alert('Failed to enroll: ' + e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Heart size={16} className="text-rose-500" /> Add to Client Nurture</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-slate-400"><Loader2 size={20} className="animate-spin mr-2" /> Loading campaigns...</div>
+          ) : campaigns.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              No Client Nurture campaign exists yet. Create one on the <span className="font-medium text-slate-700 dark:text-slate-200">Email Campaigns</span> page (type: "Client Nurture"), then come back.
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Nurture Campaign</label>
+                <select value={campaignId} onChange={e => setCampaignId(e.target.value)} className={inputCls2}>
+                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-600 dark:text-slate-300">
+                {withEmail.length} contact{withEmail.length !== 1 ? 's' : ''} will be enrolled. First check-in in {Number(campaign?.interval_days) || 30} days, then every {Number(campaign?.interval_days) || 30} days.
+                {skipped > 0 && <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">{skipped} skipped (no email address).</div>}
+              </div>
+            </>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button onClick={submit} disabled={saving || loading || campaigns.length === 0 || withEmail.length === 0} className="flex-1 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Heart size={14} />} Enroll {withEmail.length || ''}
+            </button>
+            <button onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Contacts() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -387,6 +493,7 @@ export default function Contacts() {
   const [sortDir, setSortDir] = useState('desc')
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [confirmPending, setConfirmPending] = useState(null)
+  const [nurtureOpen, setNurtureOpen] = useState(false)
   // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
 
   const pendingContactId = useRef(null)
@@ -561,6 +668,12 @@ export default function Contacts() {
           <>
             <span className="text-sm font-medium text-blue-600 dark:text-blue-400">{selectedIds.size} selected</span>
             <button
+              onClick={() => setNurtureOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            >
+              <Heart size={14} /> Add to Nurture
+            </button>
+            <button
               onClick={() => setConfirmPending({ type: 'bulk' })}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
             >
@@ -695,6 +808,13 @@ export default function Contacts() {
         <CreateModal
           onClose={() => setCreating(false)}
           onCreate={handleCreate}
+        />
+      )}
+      {nurtureOpen && (
+        <NurtureEnrollModal
+          contacts={contacts.filter(c => selectedIds.has(c.id))}
+          onClose={() => setNurtureOpen(false)}
+          onDone={(n) => { setSelectedIds(new Set()); alert(`Enrolled ${n} client${n !== 1 ? 's' : ''} into the nurture campaign.`) }}
         />
       )}
     </div>
