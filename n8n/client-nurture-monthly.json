@@ -6,14 +6,13 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 10
+              "field": "hours"
             }
           ]
         }
       },
       "id": "e1f2a3b4-0001-4e01-9e01-000000000001",
-      "name": "Check Every 10 Min",
+      "name": "Check Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [
@@ -141,7 +140,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const client = $json;\nconst campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === client.campaign_id);\nconst now = new Date();\n// Campaign paused/missing -> skip (do not send, do not reschedule).\nif (!campaign) { return { ...client, shouldSend: false, client_id: client.id, nowISO: now.toISOString() }; }\nconst interval = Number(campaign.interval_days) || 30;\n// TESTING: reschedule 10 minutes out. PRODUCTION: new Date(now.getTime() + interval * 86400000)\nconst nextSendAt = new Date(now.getTime() + 10 * 60000).toISOString();\nconst firstName = (client.name || 'there').split(' ')[0];\nreturn {\n  ...client,\n  shouldSend: true,\n  client_id: client.id,\n  email: client.email,\n  name: client.name || '',\n  firstName,\n  note: client.note || '',\n  tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n  fromName: campaign.from_name || '',\n  subject: 'Hi ' + firstName + ', just checking in',\n  nextSendAt,\n  emailsSent: (Number(client.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
+        "jsCode": "const client = $json;\nconst campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === client.campaign_id);\nconst now = new Date();\n// Campaign paused/missing -> skip (do not send, do not reschedule).\nif (!campaign) { return { ...client, shouldSend: false, client_id: client.id, nowISO: now.toISOString() }; }\nconst interval = Number(campaign.interval_days) || 30;\nconst nextSendAt = new Date(now.getTime() + interval * 86400000).toISOString();\nconst firstName = (client.name || 'there').split(' ')[0];\nreturn {\n  ...client,\n  shouldSend: true,\n  client_id: client.id,\n  email: client.email,\n  name: client.name || '',\n  firstName,\n  note: client.note || '',\n  tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n  fromName: campaign.from_name || '',\n  subject: 'Hi ' + firstName + ', just checking in',\n  nextSendAt,\n  emailsSent: (Number(client.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
       },
       "id": "e1f2a3b4-0005-4e05-9e05-000000000005",
       "name": "Prepare",
@@ -378,7 +377,7 @@
     }
   ],
   "connections": {
-    "Check Every 10 Min": {
+    "Check Every Hour": {
       "main": [
         [
           {

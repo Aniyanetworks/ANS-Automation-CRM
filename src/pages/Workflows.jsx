@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Activity, CheckCircle, XCircle, ChevronDown, ChevronUp, Clock, Loader2, Trash2 } from 'lucide-react'
 import { getWorkflowExecutions, deleteWorkflowExecutions } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useNotify } from '../context/NotifyContext'
 
 const automationColors = {
   Website: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -36,6 +37,7 @@ function formatDuration(ms) {
 }
 
 export default function Workflows() {
+  const notify = useNotify()
   const [executions, setExecutions] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('All')
@@ -98,7 +100,7 @@ export default function Workflows() {
       setExecutions(prev => prev.filter(e => !selectedIds.has(e.id)))
       setSelectedIds(new Set())
     } catch (err) {
-      alert('Failed to delete: ' + err.message)
+      notify('Failed to delete: ' + err.message, 'error')
     }
   }
 

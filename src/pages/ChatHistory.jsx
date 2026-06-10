@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Search, MessageSquare, Bot, User, ChevronLeft, Loader2, Trash2 } from 'lucide-react'
 import { getContacts, getChatMessages, getAllChatSessions, deleteChatSession } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useNotify } from '../context/NotifyContext'
 
 const sourceColors = {
   Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -61,6 +62,7 @@ function parseMessageParts(msg) {
 }
 
 export default function ChatHistory() {
+  const notify = useNotify()
   const [sessions, setSessions] = useState([])
   const [contactMap, setContactMap] = useState({})
   const [messages, setMessages] = useState([])
@@ -130,7 +132,7 @@ export default function ChatHistory() {
       setSessions(prev => prev.filter(s => s.session_id !== sessionId))
       if (activeSessionId === sessionId) setActiveSessionId(null)
     } catch (err) {
-      alert('Failed to delete: ' + err.message)
+      notify('Failed to delete: ' + err.message, 'error')
     }
   }
 

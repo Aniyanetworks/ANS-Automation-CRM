@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart } from 'lucide-react'
 import { getContacts, updateContact, createContact, deleteContact, deleteContacts, getNurtureCampaigns, createNurtureClients } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useNotify } from '../context/NotifyContext'
 
 const sourceColors = {
   Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -47,6 +48,7 @@ function getAvatarColor(name) {
 }
 
 function EditModal({ contact, onClose, onSave }) {
+  const notify = useNotify()
   const [form, setForm] = useState({
     name: contact.name || '',
     email: contact.email || '',
@@ -67,7 +69,7 @@ function EditModal({ contact, onClose, onSave }) {
       onSave(updated)
       onClose()
     } catch (err) {
-      alert('Failed to save: ' + err.message)
+      notify('Failed to save: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -141,6 +143,7 @@ function EditModal({ contact, onClose, onSave }) {
 }
 
 function CreateModal({ onClose, onCreate }) {
+  const notify = useNotify()
   const blankForm = {
     name: '', email: '', phone: '', source: 'Website',
     service_type: '', lead_status: 'New Lead', interest: 'Pending',
@@ -163,7 +166,7 @@ function CreateModal({ onClose, onCreate }) {
       onCreate(created)
       onClose()
     } catch (err) {
-      alert('Failed to create: ' + err.message)
+      notify('Failed to create: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -391,6 +394,7 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
 }
 
 function NurtureEnrollModal({ contacts, onClose, onDone }) {
+  const notify = useNotify()
   const [campaigns, setCampaigns] = useState([])
   const [campaignId, setCampaignId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -399,7 +403,7 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
   useEffect(() => {
     getNurtureCampaigns()
       .then(data => { setCampaigns(data); if (data.length) setCampaignId(data[0].id) })
-      .catch(e => alert('Failed to load nurture campaigns: ' + e.message))
+      .catch(e => notify('Failed to load nurture campaigns: ' + e.message, 'error'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -412,9 +416,8 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
     if (!campaign || withEmail.length === 0) return
     setSaving(true)
     try {
-      // TESTING: first check-in 10 minutes after enrolment.
-      // PRODUCTION: const next = new Date(Date.now() + (Number(campaign.interval_days) || 30) * 86400000).toISOString()
-      const next = new Date(Date.now() + 10 * 60000).toISOString()
+      const interval = Number(campaign.interval_days) || 30
+      const next = new Date(Date.now() + interval * 86400000).toISOString()
       const rows = withEmail.map(c => ({
         campaign_id: campaign.id,
         contact_id: c.id,
@@ -429,7 +432,7 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
       onDone(withEmail.length)
       onClose()
     } catch (e) {
-      alert('Failed to enroll: ' + e.message)
+      notify('Failed to enroll: ' + e.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -476,6 +479,7 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
 }
 
 export default function Contacts() {
+  const notify = useNotify()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -550,7 +554,7 @@ export default function Contacts() {
         setSelectedIds(new Set())
       }
     } catch (err) {
-      alert('Failed to delete: ' + err.message)
+      notify('Failed to delete: ' + err.message, 'error')
     } finally {
       setConfirmPending(null)
     }
@@ -814,7 +818,7 @@ export default function Contacts() {
         <NurtureEnrollModal
           contacts={contacts.filter(c => selectedIds.has(c.id))}
           onClose={() => setNurtureOpen(false)}
-          onDone={(n) => { setSelectedIds(new Set()); alert(`Enrolled ${n} client${n !== 1 ? 's' : ''} into the nurture campaign.`) }}
+          onDone={(n) => { setSelectedIds(new Set()); notify(`Enrolled ${n} client${n !== 1 ? 's' : ''} into the nurture campaign.`, 'success') }}
         />
       )}
     </div>

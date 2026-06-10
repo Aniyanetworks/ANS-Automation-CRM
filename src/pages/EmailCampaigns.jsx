@@ -10,6 +10,7 @@ import {
   getNurtureClients, updateNurtureClient, deleteNurtureClient,
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useNotify } from '../context/NotifyContext'
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
 
@@ -28,6 +29,7 @@ const DEFAULT_NURTURE_PROMPT = `You are writing on behalf of Aniya Network Solut
 // ── Create Campaign Modal ─────────────────────────────────────────────────────
 
 function CampaignModal({ onClose, onCreate }) {
+  const notify = useNotify()
   const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, ai_reply_prompt: DEFAULT_PROMPT })
   const [saving, setSaving] = useState(false)
 
@@ -59,7 +61,7 @@ function CampaignModal({ onClose, onCreate }) {
       onCreate(created)
       onClose()
     } catch (err) {
-      alert('Failed to create campaign: ' + err.message)
+      notify('Failed to create campaign: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -167,6 +169,7 @@ function parseCsv(text) {
 }
 
 function AddLeadsModal({ campaignId, onClose, onAdded }) {
+  const notify = useNotify()
   const [staged, setStaged] = useState([])
   const [draft, setDraft] = useState({ name: '', email: '', service: '' })
   const [saving, setSaving] = useState(false)
@@ -224,7 +227,7 @@ function AddLeadsModal({ campaignId, onClose, onAdded }) {
       onAdded(created)
       onClose()
     } catch (err) {
-      alert('Failed to add leads: ' + err.message)
+      notify('Failed to add leads: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -399,6 +402,7 @@ function StepRow({ step, index, onSave, onDelete }) {
 // ── Nurture Campaign Detail ───────────────────────────────────────────────────
 
 function NurtureDetail({ campaign, onUpdated }) {
+  const notify = useNotify()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [confirmClient, setConfirmClient] = useState(null)
@@ -412,7 +416,7 @@ function NurtureDetail({ campaign, onUpdated }) {
     setIntervalDays(campaign.interval_days ?? 30)
     getNurtureClients(campaign.id)
       .then(setClients)
-      .catch(e => alert('Failed to load clients: ' + e.message))
+      .catch(e => notify('Failed to load clients: ' + e.message, 'error'))
       .finally(() => setLoading(false))
   }, [campaign.id])
 
@@ -422,13 +426,13 @@ function NurtureDetail({ campaign, onUpdated }) {
     setSavingSettings(true)
     try {
       onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_prompt: prompt, interval_days: Number(interval) || 30 }))
-    } catch (e) { alert('Failed to save: ' + e.message) } finally { setSavingSettings(false) }
+    } catch (e) { notify('Failed to save: ' + e.message, 'error') } finally { setSavingSettings(false) }
   }
 
   async function toggleCampaign() {
     const next = campaign.status === 'Active' ? 'Paused' : 'Active'
     try { onUpdated(await updateEmailCampaign(campaign.id, { status: next })) }
-    catch (e) { alert('Failed: ' + e.message) }
+    catch (e) { notify('Failed: ' + e.message, 'error') }
   }
 
   async function toggleClient(c) {
@@ -436,7 +440,7 @@ function NurtureDetail({ campaign, onUpdated }) {
     try {
       const updated = await updateNurtureClient(c.id, { status: next })
       setClients(prev => prev.map(x => x.id === c.id ? updated : x))
-    } catch (e) { alert('Failed: ' + e.message) }
+    } catch (e) { notify('Failed: ' + e.message, 'error') }
   }
 
   async function removeClient() {
@@ -444,7 +448,7 @@ function NurtureDetail({ campaign, onUpdated }) {
     try {
       await deleteNurtureClient(confirmClient.id)
       setClients(prev => prev.filter(x => x.id !== confirmClient.id))
-    } catch (e) { alert('Failed: ' + e.message) } finally { setConfirmClient(null) }
+    } catch (e) { notify('Failed: ' + e.message, 'error') } finally { setConfirmClient(null) }
   }
 
   const active = clients.filter(c => c.status === 'Active').length
@@ -554,6 +558,7 @@ function NurtureDetail({ campaign, onUpdated }) {
 // ── Campaign Detail ───────────────────────────────────────────────────────────
 
 function CampaignDetail({ campaign, onUpdated }) {
+  const notify = useNotify()
   const [steps, setSteps] = useState([])
   const [leads, setLeads] = useState([])
   const [loading, setLoading] = useState(true)
@@ -564,7 +569,7 @@ function CampaignDetail({ campaign, onUpdated }) {
     setLoading(true)
     Promise.all([getEmailSteps(campaign.id), getEmailLeads(campaign.id)])
       .then(([s, l]) => { setSteps(s); setLeads(l) })
-      .catch(e => alert('Failed to load: ' + e.message))
+      .catch(e => notify('Failed to load: ' + e.message, 'error'))
       .finally(() => setLoading(false))
   }, [campaign.id])
 
@@ -580,7 +585,7 @@ function CampaignDetail({ campaign, onUpdated }) {
       })
       setSteps(prev => [...prev, created])
     } catch (e) {
-      alert('Failed to add step: ' + e.message)
+      notify('Failed to add step: ' + e.message, 'error')
     }
   }
 
@@ -594,7 +599,7 @@ function CampaignDetail({ campaign, onUpdated }) {
       await deleteEmailStep(id)
       setSteps(prev => prev.filter(s => s.id !== id))
     } catch (e) {
-      alert('Failed to delete step: ' + e.message)
+      notify('Failed to delete step: ' + e.message, 'error')
     }
   }
 
@@ -604,7 +609,7 @@ function CampaignDetail({ campaign, onUpdated }) {
       await deleteEmailLead(confirmLead.id)
       setLeads(prev => prev.filter(l => l.id !== confirmLead.id))
     } catch (e) {
-      alert('Failed to delete lead: ' + e.message)
+      notify('Failed to delete lead: ' + e.message, 'error')
     } finally {
       setConfirmLead(null)
     }
@@ -616,7 +621,7 @@ function CampaignDetail({ campaign, onUpdated }) {
       const updated = await updateEmailCampaign(campaign.id, { status: next })
       onUpdated(updated)
     } catch (e) {
-      alert('Failed to update: ' + e.message)
+      notify('Failed to update: ' + e.message, 'error')
     }
   }
 
@@ -760,6 +765,7 @@ function CampaignDetail({ campaign, onUpdated }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function EmailCampaigns() {
+  const notify = useNotify()
   const [campaigns, setCampaigns] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -793,7 +799,7 @@ export default function EmailCampaigns() {
       setCampaigns(prev => prev.filter(c => c.id !== confirmCampaign.id))
       setSelected(s => s && s.id === confirmCampaign.id ? null : s)
     } catch (e) {
-      alert('Failed to delete: ' + e.message)
+      notify('Failed to delete: ' + e.message, 'error')
     } finally {
       setConfirmCampaign(null)
     }
