@@ -30,7 +30,7 @@ const DEFAULT_NURTURE_PROMPT = `You are writing on behalf of Aniya Network Solut
 
 function CampaignModal({ onClose, onCreate }) {
   const notify = useNotify()
-  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, ai_reply_prompt: DEFAULT_PROMPT })
+  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, interval_unit: 'days', ai_reply_prompt: DEFAULT_PROMPT })
   const [saving, setSaving] = useState(false)
 
   const isNurture = form.type === 'nurture'
@@ -109,9 +109,16 @@ function CampaignModal({ onClose, onCreate }) {
           </div>
           {isNurture && (
             <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Check-in every (days)</label>
-              <input type="number" min="1" value={form.interval_days} onChange={e => setForm(f => ({ ...f, interval_days: e.target.value }))} className={inputCls} />
-              <p className="text-xs text-slate-400 mt-1">First check-in fires this many days after a client is enrolled, then repeats. 30 = monthly.</p>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Check-in every</label>
+              <div className="flex gap-2">
+                <input type="number" min="1" value={form.interval_days} onChange={e => setForm(f => ({ ...f, interval_days: e.target.value }))} className={`${inputCls} w-24`} />
+                <select value={form.interval_unit} onChange={e => setForm(f => ({ ...f, interval_unit: e.target.value }))} className={inputCls}>
+                  <option value="minutes">minutes</option>
+                  <option value="hours">hours</option>
+                  <option value="days">days</option>
+                </select>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">First check-in fires this long after a client is enrolled, then repeats. 30 days = monthly.</p>
             </div>
           )}
           <div>
@@ -408,24 +415,26 @@ function NurtureDetail({ campaign, onUpdated }) {
   const [confirmClient, setConfirmClient] = useState(null)
   const [prompt, setPrompt] = useState(campaign.ai_reply_prompt || '')
   const [interval, setIntervalDays] = useState(campaign.interval_days ?? 30)
+  const [unit, setUnit] = useState(campaign.interval_unit || 'days')
   const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setPrompt(campaign.ai_reply_prompt || '')
     setIntervalDays(campaign.interval_days ?? 30)
+    setUnit(campaign.interval_unit || 'days')
     getNurtureClients(campaign.id)
       .then(setClients)
       .catch(e => notify('Failed to load clients: ' + e.message, 'error'))
       .finally(() => setLoading(false))
   }, [campaign.id])
 
-  const settingsDirty = prompt !== (campaign.ai_reply_prompt || '') || Number(interval) !== (campaign.interval_days ?? 30)
+  const settingsDirty = prompt !== (campaign.ai_reply_prompt || '') || Number(interval) !== (campaign.interval_days ?? 30) || unit !== (campaign.interval_unit || 'days')
 
   async function saveSettings() {
     setSavingSettings(true)
     try {
-      onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_prompt: prompt, interval_days: Number(interval) || 30 }))
+      onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_prompt: prompt, interval_days: Number(interval) || 30, interval_unit: unit }))
     } catch (e) { notify('Failed to save: ' + e.message, 'error') } finally { setSavingSettings(false) }
   }
 
@@ -470,7 +479,7 @@ function NurtureDetail({ campaign, onUpdated }) {
           <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Heart size={18} className="text-rose-500" /> {campaign.name}
           </h2>
-          <p className="text-sm text-slate-400 mt-0.5">Client relationship nurture · every {campaign.interval_days ?? 30} days · {campaign.from_name || 'no sender name'}</p>
+          <p className="text-sm text-slate-400 mt-0.5">Client relationship nurture · every {campaign.interval_days ?? 30} {campaign.interval_unit || 'days'} · {campaign.from_name || 'no sender name'}</p>
         </div>
         <button
           onClick={toggleCampaign}
@@ -504,8 +513,15 @@ function NurtureDetail({ campaign, onUpdated }) {
           </button>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Check-in every (days)</label>
-          <input type="number" min="1" value={interval} onChange={e => setIntervalDays(e.target.value)} className={`${inputCls} max-w-32`} />
+          <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Check-in every</label>
+          <div className="flex gap-2 max-w-xs">
+            <input type="number" min="1" value={interval} onChange={e => setIntervalDays(e.target.value)} className={`${inputCls} w-24`} />
+            <select value={unit} onChange={e => setUnit(e.target.value)} className={inputCls}>
+              <option value="minutes">minutes</option>
+              <option value="hours">hours</option>
+              <option value="days">days</option>
+            </select>
+          </div>
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">AI Check-in Prompt</label>

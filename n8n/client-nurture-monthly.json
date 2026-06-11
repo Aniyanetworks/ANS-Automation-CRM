@@ -6,13 +6,14 @@
         "rule": {
           "interval": [
             {
-              "field": "hours"
+              "field": "minutes",
+              "minutesInterval": 5
             }
           ]
         }
       },
       "id": "e1f2a3b4-0001-4e01-9e01-000000000001",
-      "name": "Check Every Hour",
+      "name": "Check Every 5 Min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [
@@ -140,7 +141,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const client = $json;\nconst campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === client.campaign_id);\nconst now = new Date();\n// Campaign paused/missing -> skip (do not send, do not reschedule).\nif (!campaign) { return { ...client, shouldSend: false, client_id: client.id, nowISO: now.toISOString() }; }\nconst interval = Number(campaign.interval_days) || 30;\nconst nextSendAt = new Date(now.getTime() + interval * 86400000).toISOString();\nconst firstName = (client.name || 'there').split(' ')[0];\nreturn {\n  ...client,\n  shouldSend: true,\n  client_id: client.id,\n  email: client.email,\n  name: client.name || '',\n  firstName,\n  note: client.note || '',\n  tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n  fromName: campaign.from_name || '',\n  subject: 'Hi ' + firstName + ', just checking in',\n  nextSendAt,\n  emailsSent: (Number(client.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
+        "jsCode": "const client = $json;\nconst campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === client.campaign_id);\nconst now = new Date();\n// Campaign paused/missing -> skip (do not send, do not reschedule).\nif (!campaign) { return { ...client, shouldSend: false, client_id: client.id, nowISO: now.toISOString() }; }\nconst interval = Number(campaign.interval_days) || 30;\nconst unitMs = { minutes: 60000, hours: 3600000, days: 86400000 };\nconst nextSendAt = new Date(now.getTime() + interval * (unitMs[campaign.interval_unit] || 86400000)).toISOString();\nconst firstName = (client.name || 'there').split(' ')[0];\nreturn {\n  ...client,\n  shouldSend: true,\n  client_id: client.id,\n  email: client.email,\n  name: client.name || '',\n  firstName,\n  note: client.note || '',\n  tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n  fromName: campaign.from_name || '',\n  subject: 'Hi ' + firstName + ', just checking in',\n  nextSendAt,\n  emailsSent: (Number(client.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
       },
       "id": "e1f2a3b4-0005-4e05-9e05-000000000005",
       "name": "Prepare",
@@ -176,7 +177,7 @@
         "promptType": "define",
         "text": "Write the relationship check-in email body now.",
         "options": {
-          "systemMessage": "={{ $('Prepare').item.json.tone + '\\n\\n--- Client ---\\nName: ' + $('Prepare').item.json.name + '\\nOur history / notes: ' + ($('Prepare').item.json.note || '(none provided)') + '\\n\\nWrite ONLY the email body (no subject line, no placeholders). Warm, personal, 3-5 sentences. Ask how they and their business/family are doing and reference our past work together. This is a relationship check-in, NOT a sales pitch — do not promote services, pricing, or ask for new business.' }}"
+          "systemMessage": "={{ $('Prepare').item.json.tone + '\\n\\n--- Client ---\\nName: ' + $('Prepare').item.json.name + '\\nOur history / notes: ' + ($('Prepare').item.json.note || '(none provided)') + '\\n\\nWrite ONLY the email body (no subject line, no placeholders). Warm, personal, 3-5 sentences. Ask how they and their business/family are doing and reference our past work together. This is a relationship check-in, NOT a sales pitch — do not promote services, pricing, or ask for new business. Do NOT add any sign-off, closing line, signature, or name (such as Warm regards or [Your Name]) — a signature is appended automatically, so end with your final sentence.' }}"
         }
       },
       "id": "e1f2a3b4-0007-4e07-9e07-000000000007",
@@ -377,7 +378,7 @@
     }
   ],
   "connections": {
-    "Check Every Hour": {
+    "Check Every 5 Min": {
       "main": [
         [
           {

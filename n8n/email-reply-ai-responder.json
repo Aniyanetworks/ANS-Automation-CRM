@@ -222,7 +222,7 @@
         "promptType": "define",
         "text": "={{ $('Extract Reply').item.json.body }}",
         "options": {
-          "systemMessage": "={{ ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'You are a helpful sales assistant. Reply warmly and concisely.') + '\\n\\n--- Lead context ---\\nName: ' + ($('Pick Lead').item.json.name || '') + '\\nEmail: ' + ($('Pick Lead').item.json.email || '') + '\\nService of interest: ' + ($('Pick Lead').item.json.service || '') + '\\n\\nThe user message is the lead\\'s email reply. Write a helpful, concise reply as the email body only. No subject line, no signature placeholder.' }}"
+          "systemMessage": "={{ ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'You are a helpful sales assistant. Reply warmly and concisely.') + '\\n\\n--- Lead context ---\\nName: ' + ($('Pick Lead').item.json.name || '') + '\\nEmail: ' + ($('Pick Lead').item.json.email || '') + '\\nService of interest: ' + ($('Pick Lead').item.json.service || '') + '\\n\\nThe user message is the lead\\'s email reply. Write a helpful, concise reply as the email body only. No subject line. Do NOT add any sign-off, closing line, signature, or name (such as Warm regards or [Your Name]) — a signature is appended automatically, so end with your final sentence.' }}"
         }
       },
       "id": "5d9ec7b8-1ca0-4e5a-ace0-40653077ad47",

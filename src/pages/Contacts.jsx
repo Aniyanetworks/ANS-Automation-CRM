@@ -416,8 +416,9 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
     if (!campaign || withEmail.length === 0) return
     setSaving(true)
     try {
+      const unitMs = { minutes: 60000, hours: 3600000, days: 86400000 }
       const interval = Number(campaign.interval_days) || 30
-      const next = new Date(Date.now() + interval * 86400000).toISOString()
+      const next = new Date(Date.now() + interval * (unitMs[campaign.interval_unit] || 86400000)).toISOString()
       const rows = withEmail.map(c => ({
         campaign_id: campaign.id,
         contact_id: c.id,
@@ -461,7 +462,7 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
                 </select>
               </div>
               <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-600 dark:text-slate-300">
-                {withEmail.length} contact{withEmail.length !== 1 ? 's' : ''} will be enrolled. First check-in in {Number(campaign?.interval_days) || 30} days, then every {Number(campaign?.interval_days) || 30} days.
+                {withEmail.length} contact{withEmail.length !== 1 ? 's' : ''} will be enrolled. First check-in in {Number(campaign?.interval_days) || 30} {campaign?.interval_unit || 'days'}, then every {Number(campaign?.interval_days) || 30} {campaign?.interval_unit || 'days'}.
                 {skipped > 0 && <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">{skipped} skipped (no email address).</div>}
               </div>
             </>
