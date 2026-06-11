@@ -9,7 +9,8 @@ auto-stop on reply, and AI-drafted replies. Built to match the existing
 |------|---------|-----|
 | `email-outreach-scheduler.json` | Schedule (every 15 min) | Find leads whose next email is due, personalize the step body, send via Gmail, advance the lead to the next step. |
 | `email-reply-ai-responder.json` | Gmail inbox (poll every min) | On an inbound reply: match the lead, set `replied=true` / `status=Replied` (stops follow-ups), draft an AI reply with the n8n AI Agent (OpenAI), send it. |
-| `client-nurture-monthly.json` | Schedule (hourly) | Relationship nurture for PAST clients. Every `interval_days` (default 30) sends an AI-written, non-sales check-in using the client's note, then reschedules. Runs until the client/campaign is paused. Enroll clients from the Contacts page. |
+| `client-nurture-monthly.json` | Schedule (every 5 min) | Relationship nurture for PAST clients. Every `interval_days`/`interval_unit` sends an AI-written, non-sales check-in using the client's note, then reschedules. Runs until the client/campaign is paused. Enroll clients from the Contacts page. |
+| `client-nurture-reply.json` | Gmail inbox (poll every min) | When a nurture client replies, an AI agent replies back in a relationship tone (multi-turn — replies to every further reply). Does NOT change the check-in schedule; `next_send_at` is left untouched, so the next scheduled check-in still goes out. |
 
 ## Why two workflows
 The sender is time-triggered (cron); the reply handler is event-triggered (inbox).

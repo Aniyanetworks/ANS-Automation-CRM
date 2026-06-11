@@ -47,7 +47,7 @@ export default function Header({ onMenuToggle }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { isDark, toggleTheme } = useTheme()
-  const { user, signOut } = useAuth()
+  const { user, signOut, isDemo } = useAuth()
 
   const [searchVal, setSearchVal] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -182,14 +182,16 @@ export default function Header({ onMenuToggle }) {
           </div>
 
           {/* Add Contact */}
-          <button
-            onClick={handleAddContact}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            <Plus size={15} />
-            <span className="hidden md:inline">Add Contact</span>
-            <span className="md:hidden">Add</span>
-          </button>
+          {!isDemo && (
+            <button
+              onClick={handleAddContact}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <Plus size={15} />
+              <span className="hidden md:inline">Add Contact</span>
+              <span className="md:hidden">Add</span>
+            </button>
+          )}
 
           {/* Theme toggle */}
           <button
@@ -235,13 +237,15 @@ export default function Header({ onMenuToggle }) {
 
                 {/* Actions */}
                 <div className="p-1.5">
-                  <button
-                    onClick={() => { setShowUserMenu(false); setShowChangePassword(true) }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-lg transition-colors"
-                  >
-                    <KeyRound size={15} className="text-slate-400" />
-                    Change Password
-                  </button>
+                  {!isDemo && (
+                    <button
+                      onClick={() => { setShowUserMenu(false); setShowChangePassword(true) }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-lg transition-colors"
+                    >
+                      <KeyRound size={15} className="text-slate-400" />
+                      Change Password
+                    </button>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"

@@ -11,6 +11,7 @@ import {
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
+import { useAuth } from '../context/AuthContext'
 
 const inputCls = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
 
@@ -782,6 +783,7 @@ function CampaignDetail({ campaign, onUpdated }) {
 
 export default function EmailCampaigns() {
   const notify = useNotify()
+  const { isDemo } = useAuth()
   const [campaigns, setCampaigns] = useState([])
   const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -840,12 +842,14 @@ export default function EmailCampaigns() {
 
       {/* Campaign list */}
       <div className="lg:w-72 flex-shrink-0 space-y-3">
-        <button
-          onClick={() => setCreating(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-        >
-          <Plus size={15} /> New Campaign
-        </button>
+        {!isDemo && (
+          <button
+            onClick={() => setCreating(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+          >
+            <Plus size={15} /> New Campaign
+          </button>
+        )}
         <div className="space-y-1.5">
           {campaigns.length === 0 ? (
             <div className="text-center text-slate-400 text-sm py-8">No campaigns yet.</div>

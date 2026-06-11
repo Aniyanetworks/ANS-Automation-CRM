@@ -1,8 +1,13 @@
 import { supabase } from '../lib/supabase'
+import { isDemo, blockIfDemo } from '../lib/demo'
+import * as demo from '../data/demoData'
+
+// In demo mode, reads return fake data and writes throw a friendly error.
 
 // ─── CONTACTS ────────────────────────────────────────────────────────────────
 
 export async function getContacts() {
+  if (isDemo()) return demo.demoContacts
   const { data, error } = await supabase
     .from('contacts')
     .select('*')
@@ -12,6 +17,7 @@ export async function getContacts() {
 }
 
 export async function getContact(id) {
+  if (isDemo()) return demo.demoContacts.find(c => c.id === id) || null
   const { data, error } = await supabase
     .from('contacts')
     .select('*')
@@ -22,6 +28,7 @@ export async function getContact(id) {
 }
 
 export async function updateContact(id, updates) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('contacts')
     .update(updates)
@@ -33,6 +40,7 @@ export async function updateContact(id, updates) {
 }
 
 export async function createContact(contact) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('contacts')
     .insert(contact)
@@ -43,6 +51,7 @@ export async function createContact(contact) {
 }
 
 export async function deleteContact(id) {
+  blockIfDemo()
   const { error } = await supabase
     .from('contacts')
     .delete()
@@ -51,6 +60,7 @@ export async function deleteContact(id) {
 }
 
 export async function deleteContacts(ids) {
+  blockIfDemo()
   const { error } = await supabase
     .from('contacts')
     .delete()
@@ -61,6 +71,7 @@ export async function deleteContacts(ids) {
 // ─── CHAT MESSAGES ───────────────────────────────────────────────────────────
 
 export async function getChatMessages(sessionId) {
+  if (isDemo()) return demo.demoChatMessages[sessionId] || []
   const { data, error } = await supabase
     .from('chat_messages')
     .select('*')
@@ -71,6 +82,7 @@ export async function getChatMessages(sessionId) {
 }
 
 export async function deleteChatSession(sessionId) {
+  blockIfDemo()
   const { error } = await supabase
     .from('chat_messages')
     .delete()
@@ -79,6 +91,7 @@ export async function deleteChatSession(sessionId) {
 }
 
 export async function getAllChatSessions() {
+  if (isDemo()) return demo.demoChatSessions
   // Get latest message per session to show in chat list
   const { data, error } = await supabase
     .from('chat_messages')
@@ -98,6 +111,7 @@ export async function getAllChatSessions() {
 // ─── FOLLOWUPS ───────────────────────────────────────────────────────────────
 
 export async function getFollowups() {
+  if (isDemo()) return demo.demoFollowups
   const { data, error } = await supabase
     .from('followups')
     .select('*')
@@ -107,6 +121,7 @@ export async function getFollowups() {
 }
 
 export async function updateFollowupStatus(id, status) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('followups')
     .update({ status })
@@ -118,6 +133,7 @@ export async function updateFollowupStatus(id, status) {
 }
 
 export async function createFollowup(followup) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('followups')
     .insert(followup)
@@ -128,6 +144,7 @@ export async function createFollowup(followup) {
 }
 
 export async function deleteFollowup(id) {
+  blockIfDemo()
   const { error } = await supabase
     .from('followups')
     .delete()
@@ -136,6 +153,7 @@ export async function deleteFollowup(id) {
 }
 
 export async function deleteWorkflowExecutions(ids) {
+  blockIfDemo()
   const { error } = await supabase
     .from('workflow_executions')
     .delete()
@@ -146,6 +164,7 @@ export async function deleteWorkflowExecutions(ids) {
 // ─── WORKFLOW EXECUTIONS ──────────────────────────────────────────────────────
 
 export async function getAllWorkflowExecutions() {
+  if (isDemo()) return demo.demoExecutions
   const { data, error } = await supabase
     .from('workflow_executions')
     .select('*')
@@ -155,6 +174,7 @@ export async function getAllWorkflowExecutions() {
 }
 
 export async function getWorkflowExecutions() {
+  if (isDemo()) return demo.demoExecutions
   const { data, error } = await supabase
     .from('workflow_executions')
     .select('*')
@@ -165,6 +185,7 @@ export async function getWorkflowExecutions() {
 }
 
 export async function getFollowUpExecutions() {
+  if (isDemo()) return demo.demoExecutions.filter(e => e.automation === 'follow_up')
   const { data, error } = await supabase
     .from('workflow_executions')
     .select('*')
@@ -176,6 +197,7 @@ export async function getFollowUpExecutions() {
 }
 
 export async function getFollowUpSequenceContacts() {
+  if (isDemo()) return demo.demoContacts.filter(c => c.current_step && c.current_step !== 'START')
   const { data, error } = await supabase
     .from('contacts')
     .select('id, name, phone, email, source, current_step, last_action_type, last_message_sent, last_action_date, lead_status, customer_replied, unsubscribe, avatar, avatar_color')
@@ -189,6 +211,7 @@ export async function getFollowUpSequenceContacts() {
 // ─── EMAIL AUTOMATION ────────────────────────────────────────────────────────
 
 export async function getEmailCampaigns() {
+  if (isDemo()) return demo.demoCampaigns
   const { data, error } = await supabase
     .from('email_campaigns')
     .select('*')
@@ -198,6 +221,7 @@ export async function getEmailCampaigns() {
 }
 
 export async function createEmailCampaign(campaign) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('email_campaigns')
     .insert(campaign)
@@ -208,6 +232,7 @@ export async function createEmailCampaign(campaign) {
 }
 
 export async function updateEmailCampaign(id, updates) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('email_campaigns')
     .update(updates)
@@ -219,6 +244,7 @@ export async function updateEmailCampaign(id, updates) {
 }
 
 export async function deleteEmailCampaign(id) {
+  blockIfDemo()
   const { error } = await supabase
     .from('email_campaigns')
     .delete()
@@ -227,6 +253,7 @@ export async function deleteEmailCampaign(id) {
 }
 
 export async function getEmailSteps(campaignId) {
+  if (isDemo()) return demo.demoSteps[campaignId] || []
   const { data, error } = await supabase
     .from('email_steps')
     .select('*')
@@ -237,6 +264,7 @@ export async function getEmailSteps(campaignId) {
 }
 
 export async function createEmailStep(step) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('email_steps')
     .insert(step)
@@ -247,6 +275,7 @@ export async function createEmailStep(step) {
 }
 
 export async function updateEmailStep(id, updates) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('email_steps')
     .update(updates)
@@ -258,6 +287,7 @@ export async function updateEmailStep(id, updates) {
 }
 
 export async function deleteEmailStep(id) {
+  blockIfDemo()
   const { error } = await supabase
     .from('email_steps')
     .delete()
@@ -266,6 +296,7 @@ export async function deleteEmailStep(id) {
 }
 
 export async function getEmailLeads(campaignId) {
+  if (isDemo()) return demo.demoLeads[campaignId] || []
   const { data, error } = await supabase
     .from('email_leads')
     .select('*')
@@ -276,6 +307,7 @@ export async function getEmailLeads(campaignId) {
 }
 
 export async function createEmailLeads(leads) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('email_leads')
     .insert(leads)
@@ -285,6 +317,7 @@ export async function createEmailLeads(leads) {
 }
 
 export async function deleteEmailLead(id) {
+  blockIfDemo()
   const { error } = await supabase
     .from('email_leads')
     .delete()
@@ -295,6 +328,7 @@ export async function deleteEmailLead(id) {
 // ─── CLIENT NURTURE ──────────────────────────────────────────────────────────
 
 export async function getNurtureCampaigns() {
+  if (isDemo()) return demo.demoCampaigns.filter(c => c.type === 'nurture')
   const { data, error } = await supabase
     .from('email_campaigns')
     .select('*')
@@ -305,6 +339,7 @@ export async function getNurtureCampaigns() {
 }
 
 export async function getNurtureClients(campaignId) {
+  if (isDemo()) return demo.demoNurtureClients[campaignId] || []
   const { data, error } = await supabase
     .from('nurture_clients')
     .select('*')
@@ -315,6 +350,7 @@ export async function getNurtureClients(campaignId) {
 }
 
 export async function createNurtureClients(clients) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('nurture_clients')
     .insert(clients)
@@ -324,6 +360,7 @@ export async function createNurtureClients(clients) {
 }
 
 export async function updateNurtureClient(id, updates) {
+  blockIfDemo()
   const { data, error } = await supabase
     .from('nurture_clients')
     .update(updates)
@@ -335,6 +372,7 @@ export async function updateNurtureClient(id, updates) {
 }
 
 export async function deleteNurtureClient(id) {
+  blockIfDemo()
   const { error } = await supabase
     .from('nurture_clients')
     .delete()
@@ -346,7 +384,16 @@ export async function deleteNurtureClient(id) {
 
 export async function searchContacts(query) {
   if (!query || query.trim().length < 2) return []
-  const q = query.trim()
+  const q = query.trim().toLowerCase()
+  if (isDemo()) {
+    return demo.demoContacts
+      .filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q) ||
+        (c.service_type || '').toLowerCase().includes(q))
+      .slice(0, 6)
+  }
   const { data, error } = await supabase
     .from('contacts')
     .select('id, name, email, phone, lead_status, source, avatar, avatar_color')
@@ -360,6 +407,7 @@ export async function searchContacts(query) {
 // ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
 
 export async function getDashboardStats() {
+  if (isDemo()) return demo.demoDashboardStats()
   const [contactsRes, followupsRes, executionsRes] = await Promise.all([
     supabase.from('contacts').select('*'),
     supabase.from('followups').select('status, follow_up_date'),

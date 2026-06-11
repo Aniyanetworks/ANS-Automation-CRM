@@ -55,6 +55,7 @@
       },
       "id": "a1b2c3d4-0002-4a02-9002-000000000002",
       "name": "Get All Steps",
+      "executeOnce": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -103,6 +104,7 @@
       },
       "id": "a1b2c3d4-0003-4a03-9003-000000000003",
       "name": "Get Campaigns",
+      "executeOnce": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -159,6 +161,7 @@
       },
       "id": "a1b2c3d4-0004-4a04-9004-000000000004",
       "name": "Get Due Leads",
+      "executeOnce": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -174,7 +177,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const leads = $input.first().json;\nif (!Array.isArray(leads)) return [{ json: leads }];\nif (leads.length === 0) return [];\nreturn leads.map(l => ({ json: l }));"
+        "jsCode": "// Works whether Get Due Leads returns the array wrapped in one item's json,\n// or split into one item per row. Emits every due lead as its own item.\nconst out = [];\nfor (const it of $input.all()) {\n  const v = it.json;\n  if (Array.isArray(v)) { for (const c of v) out.push({ json: c }); }\n  else if (v && (v.id || v.email)) { out.push({ json: v }); }\n}\nreturn out;"
       },
       "id": "a1b2c3d4-0005-4a05-9005-000000000005",
       "name": "Split Leads",

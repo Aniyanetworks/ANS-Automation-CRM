@@ -4,6 +4,7 @@ import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, 
 import { getContacts, updateContact, createContact, deleteContact, deleteContacts, getNurtureCampaigns, createNurtureClients } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
+import { useAuth } from '../context/AuthContext'
 
 const sourceColors = {
   Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -416,9 +417,9 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
     if (!campaign || withEmail.length === 0) return
     setSaving(true)
     try {
-      const unitMs = { minutes: 60000, hours: 3600000, days: 86400000 }
-      const interval = Number(campaign.interval_days) || 30
-      const next = new Date(Date.now() + interval * (unitMs[campaign.interval_unit] || 86400000)).toISOString()
+      // First check-in fires on the next scheduler tick (so it goes out promptly after enrolment).
+      // The recurring interval is applied by the nurture workflow after each send.
+      const next = new Date().toISOString()
       const rows = withEmail.map(c => ({
         campaign_id: campaign.id,
         contact_id: c.id,
@@ -481,6 +482,7 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
 
 export default function Contacts() {
   const notify = useNotify()
+  const { isDemo } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -692,12 +694,14 @@ export default function Contacts() {
             </button>
           </>
         )}
-        <button
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex-shrink-0"
-        >
-          <Plus size={15} /> Add Contact
-        </button>
+        {!isDemo && (
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex-shrink-0"
+          >
+            <Plus size={15} /> Add Contact
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
