@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, MessageSquare, Bot, User, ChevronLeft, Loader2, Trash2 } from 'lucide-react'
-import { getContacts, getChatMessages, getAllChatSessions, deleteChatSession } from '../services/api'
+import { getContacts, getChatMessages, getChatMessagesByPhone, getAllChatSessions, deleteChatSession } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
 
@@ -46,9 +46,10 @@ function parseMessageParts(msg) {
   const raw = (msg.text || '').trim()
   const hasPrefix = /\b(Customer|Agent):/i.test(raw)
 
+  const sid = msg.session_id || ''
   if (!hasPrefix) {
     const text = raw.replace(/-{3,}/g, '').trim()
-    return text ? [{ role: msg.role, text, timestamp: msg.timestamp }] : []
+    return text ? [{ role: msg.role, text, timestamp: msg.timestamp, session_id: sid }] : []
   }
 
   const parts = []
@@ -57,7 +58,7 @@ function parseMessageParts(msg) {
   while ((match = regex.exec(raw)) !== null) {
     const role = match[1].toLowerCase() === 'agent' ? 'agent' : 'user'
     const text = match[2].replace(/-{3,}/g, '').trim()
-    if (text) parts.push({ role, text, timestamp: msg.timestamp })
+    if (text) parts.push({ role, text, timestamp: msg.timestamp, session_id: sid })
   }
   return parts
 }
@@ -88,7 +89,16 @@ export default function ChatHistory() {
           map[s.session_id] = bySession[s.session_id] || byPhone[s.phone] || null
         })
         setContactMap(map)
-        setSessions(sessionData)
+        // One entry per phone — keep most recent session per contact
+        const seenPhones = new Set()
+        const deduped = sessionData.filter(s => {
+          const phone = map[s.session_id]?.phone || s.phone
+          if (!phone) return true
+          if (seenPhones.has(phone)) return false
+          seenPhones.add(phone)
+          return true
+        })
+        setSessions(deduped)
       })
       .catch(console.error)
       .finally(() => setLoadingSessions(false))
@@ -97,11 +107,14 @@ export default function ChatHistory() {
   useEffect(() => {
     if (!activeSessionId) { setMessages([]); return }
     setLoadingMessages(true)
-    getChatMessages(activeSessionId)
+    const session = sessions.find(s => s.session_id === activeSessionId)
+    const phone = contactMap[activeSessionId]?.phone || session?.phone
+    const fetch = phone ? getChatMessagesByPhone(phone) : getChatMessages(activeSessionId)
+    fetch
       .then(setMessages)
       .catch(console.error)
       .finally(() => setLoadingMessages(false))
-  }, [activeSessionId])
+  }, [activeSessionId, contactMap])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -194,7 +207,7 @@ export default function ChatHistory() {
                   <Trash2 size={14} />
                 </button>
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-9 h-9 rounded-full ${isReview ? 'bg-amber-500' : avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                  <div className={`w-9 h-9 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -207,13 +220,13 @@ export default function ChatHistory() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      {isReview ? (
-                        <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                          ⭐ Review
-                        </span>
-                      ) : c?.source ? (
+                      {c?.source ? (
                         <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${sourceColors[c.source] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                           {sourceIcons[c.source] || '💬'} {c.source}
+                        </span>
+                      ) : isReview ? (
+                        <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          ⭐ Review
                         </span>
                       ) : null}
                       {c?.service_type && (
@@ -250,17 +263,13 @@ export default function ChatHistory() {
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <div className={`w-10 h-10 rounded-full ${activeSessionId?.startsWith('review-') ? 'bg-amber-500' : active?.avatar_color || getAvatarColor(active?.name)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                <div className={`w-10 h-10 rounded-full ${active?.avatar_color || getAvatarColor(active?.name)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
                   {active?.avatar || getInitials(active?.name)}
                 </div>
                 <div>
                   <div className="font-semibold text-slate-900 dark:text-white">{activeDisplayName}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {activeSessionId?.startsWith('review-') ? (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                        ⭐ Review Campaign
-                      </span>
-                    ) : active?.source && (
+                    {active?.source && (
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[active.source] || 'bg-slate-100 text-slate-600'}`}>
                         {sourceIcons[active.source]} {active.source}
                       </span>
@@ -293,9 +302,10 @@ export default function ChatHistory() {
                 const avatarColor = active?.avatar_color || getAvatarColor(active?.name)
                 return parseMessageParts(msg).map((part, j) => {
                   const isAgent = part.role === 'agent'
+                  const isReviewMsg = part.session_id?.startsWith('review-')
                   return (
                     <div key={`${msg.id || i}-${j}`} className={`flex items-end gap-2.5 ${isAgent ? 'flex-row' : 'flex-row-reverse'}`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? (activeSessionId?.startsWith('review-') ? 'bg-amber-500' : 'bg-blue-500') : avatarColor}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? (isReviewMsg ? 'bg-amber-500' : 'bg-blue-500') : avatarColor}`}>
                         {isAgent ? <Bot size={14} className="text-white" /> : <User size={14} className="text-white" />}
                       </div>
                       <div className="max-w-xs sm:max-w-sm">
@@ -307,7 +317,7 @@ export default function ChatHistory() {
                           {part.text}
                         </div>
                         <div className={`text-xs text-slate-400 mt-1 ${isAgent ? 'text-left' : 'text-right'}`}>
-                          {isAgent ? (activeSessionId?.startsWith('review-') ? '⭐ Review Bot · ' : '🤖 Jasica · ') : ''}{formatTime(part.timestamp)}
+                          {isAgent ? (isReviewMsg ? '⭐ Review Bot · ' : '🤖 Jasica · ') : ''}{formatTime(part.timestamp)}
                         </div>
                       </div>
                     </div>

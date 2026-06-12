@@ -81,6 +81,17 @@ export async function getChatMessages(sessionId) {
   return data
 }
 
+export async function getChatMessagesByPhone(phone) {
+  if (isDemo()) return []
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('phone', phone)
+    .order('timestamp', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
 export async function deleteChatSession(sessionId) {
   blockIfDemo()
   const { error } = await supabase
