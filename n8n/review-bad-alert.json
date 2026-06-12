@@ -1,5 +1,4 @@
-{
-  "name": "Review Campaign — Bad Review Admin Alert",
+﻿{
   "nodes": [
     {
       "parameters": {
@@ -12,11 +11,14 @@
           ]
         }
       },
-      "id": "b1a2d3r4-0001-4b01-9b01-000000000001",
+      "id": "c2c0b6cc-8e80-4e74-ba21-30471edda9b3",
       "name": "Check Every 15 Min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [-2656, 848]
+      "position": [
+        -1312,
+        176
+      ]
     },
     {
       "parameters": {
@@ -26,29 +28,53 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "review_rating", "value": "eq.Bad" },
-            { "name": "submitted_at",  "value": "not.is.null" },
-            { "name": "tag",           "value": "neq.bad_alerted" },
-            { "name": "select",        "value": "id,name,phone,email,review_comment,submitted_at,campaign_id,tag" }
+            {
+              "name": "review_rating",
+              "value": "eq.Bad"
+            },
+            {
+              "name": "submitted_at",
+              "value": "not.is.null"
+            },
+            {
+              "name": "tag",
+              "value": "neq.bad_alerted"
+            },
+            {
+              "name": "select",
+              "value": "id,name,phone,email,review_comment,submitted_at,campaign_id,tag"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type",  "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "options": {}
       },
-      "id": "b1a2d3r4-0002-4b02-9b02-000000000002",
+      "id": "03e8e6a9-851c-4f11-8b22-9075bf10df06",
       "name": "Get Unalerted Bad Reviews",
       "executeOnce": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-2432, 848],
+      "position": [
+        -1088,
+        176
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       }
     },
     {
@@ -59,61 +85,92 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type",  "value": "application/json" },
-            { "name": "Accept",        "value": "application/vnd.pgrst.object+json" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pgrst.object+json"
+            }
           ]
         },
         "options": {}
       },
-      "id": "b1a2d3r4-0003-4b03-9b03-000000000003",
+      "id": "136abc91-4458-4682-9cf1-81d4f5f7d4d7",
       "name": "Get Campaign Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-2208, 848],
+      "position": [
+        -864,
+        176
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       }
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const lead = $('Get Unalerted Bad Reviews').item.json;\nconst campaign = $json;\nconst submittedDate = lead.submitted_at\n  ? new Date(lead.submitted_at).toLocaleString('en-CA', { timeZone: 'America/Toronto' })\n  : 'Unknown';\n\nconst smsAlert = `⚠️ BAD REVIEW ALERT\\nCampaign: ${campaign.name || '?'}\\nFrom: ${lead.name || lead.phone || lead.email || 'Unknown'}\\nComment: ${lead.review_comment || '(no comment)'}\\nReceived: ${submittedDate}`;\n\nconst emailBody = `BAD REVIEW RECEIVED\\n\\nCampaign: ${campaign.name || '?'}\\nCustomer: ${lead.name || 'Unknown'}\\nPhone:    ${lead.phone || '—'}\\nEmail:    ${lead.email || '—'}\\nRating:   Bad\\nComment:  ${lead.review_comment || '(no comment)'}\\nReceived: ${submittedDate}\\n\\nPlease follow up with this customer as soon as possible.`;\n\nreturn {\n  ...lead,\n  campaignName: campaign.name || '?',\n  adminPhone: campaign.admin_phone || '',\n  adminEmail: campaign.admin_email || '',\n  smsAlert,\n  emailBody,\n  emailSubject: `⚠️ Bad Review — ${lead.name || lead.email || 'Customer'} (${campaign.name || 'Review Campaign'})`,\n};"
+        "jsCode": "const lead = $('Get Unalerted Bad Reviews').item.json;\nconst campaign = $json;\nconst submittedDate = lead.submitted_at\n  ? new Date(lead.submitted_at).toLocaleString('en-CA', { timeZone: 'America/Toronto' })\n  : 'Unknown';\n\nconst smsAlert = `âš ï¸ BAD REVIEW ALERT\\nCampaign: ${campaign.name || '?'}\\nFrom: ${lead.name || lead.phone || lead.email || 'Unknown'}\\nComment: ${lead.review_comment || '(no comment)'}\\nReceived: ${submittedDate}`;\n\nconst emailBody = `BAD REVIEW RECEIVED\\n\\nCampaign: ${campaign.name || '?'}\\nCustomer: ${lead.name || 'Unknown'}\\nPhone:    ${lead.phone || 'â€”'}\\nEmail:    ${lead.email || 'â€”'}\\nRating:   Bad\\nComment:  ${lead.review_comment || '(no comment)'}\\nReceived: ${submittedDate}\\n\\nPlease follow up with this customer as soon as possible.`;\n\nreturn {\n  ...lead,\n  campaignName: campaign.name || '?',\n  adminPhone: campaign.admin_phone || '',\n  adminEmail: campaign.admin_email || '',\n  smsAlert,\n  emailBody,\n  emailSubject: `âš ï¸ Bad Review â€” ${lead.name || lead.email || 'Customer'} (${campaign.name || 'Review Campaign'})`,\n};"
       },
-      "id": "b1a2d3r4-0004-4b04-9b04-000000000004",
+      "id": "a7f698d6-08f1-49fa-8dea-debdca806d67",
       "name": "Build Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1984, 848]
+      "position": [
+        -640,
+        176
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "string": [
-            { "value1": "={{ $json.adminPhone }}", "operation": "isNotEmpty" }
+            {
+              "value1": "={{ $json.adminPhone }}",
+              "operation": "isNotEmpty"
+            }
           ]
         }
       },
-      "id": "b1a2d3r4-0005-4b05-9b05-000000000005",
+      "id": "5f4d6209-a322-4c8d-80fe-16ae830c857d",
       "name": "Has Admin Phone?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [-1760, 736]
+      "position": [
+        -416,
+        64
+      ]
     },
     {
       "parameters": {
         "resource": "message",
         "to": "={{ $json.adminPhone }}",
-        "from": "+1YOUR_TWILIO_NUMBER",
-        "body": "={{ $json.smsAlert }}"
+        "from": "+13653603797",
+        "body": "={{ $json.smsAlert }}",
+        "options": {}
       },
-      "id": "b1a2d3r4-0006-4b06-9b06-000000000006",
+      "id": "56b3f729-f242-45ad-aad9-743940ca61eb",
       "name": "SMS Admin",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [-1536, 640],
+      "position": [
+        -192,
+        -32
+      ],
       "credentials": {
-        "twilioApi": { "id": "YOUR_TWILIO_CREDENTIAL_ID", "name": "Twilio account" }
+        "twilioApi": {
+          "id": "iq0iE8ReZovuE4JX",
+          "name": "MP 12184380445 Twilio account"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -121,15 +178,21 @@
       "parameters": {
         "conditions": {
           "string": [
-            { "value1": "={{ $json.adminEmail }}", "operation": "isNotEmpty" }
+            {
+              "value1": "={{ $json.adminEmail }}",
+              "operation": "isNotEmpty"
+            }
           ]
         }
       },
-      "id": "b1a2d3r4-0007-4b07-9b07-000000000007",
+      "id": "a5825d2d-4109-4ff1-8dff-78c4f31631ff",
       "name": "Has Admin Email?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [-1760, 960]
+      "position": [
+        -416,
+        288
+      ]
     },
     {
       "parameters": {
@@ -137,15 +200,24 @@
         "subject": "={{ $json.emailSubject }}",
         "emailType": "text",
         "message": "={{ $json.emailBody }}",
-        "options": { "appendAttribution": false }
+        "options": {
+          "appendAttribution": false
+        }
       },
-      "id": "b1a2d3r4-0008-4b08-9b08-000000000008",
+      "id": "9046f512-5c96-4009-ac93-939b5ad81e41",
       "name": "Email Admin",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [-1536, 960],
+      "position": [
+        -192,
+        288
+      ],
+      "webhookId": "94b71ad3-9ee9-4ff1-8b82-b861da53be64",
       "credentials": {
-        "gmailOAuth2": { "id": "5m7tLE66Mg5tj0xf", "name": "Gmail account" }
+        "gmailOAuth2": {
+          "id": "5m7tLE66Mg5tj0xf",
+          "name": "Gmail account"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -158,26 +230,44 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type",  "value": "application/json" },
-            { "name": "Prefer",        "value": "return=representation" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
           ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "tag", "value": "bad_alerted" }
+            {
+              "name": "tag",
+              "value": "bad_alerted"
+            }
           ]
         },
         "options": {}
       },
-      "id": "b1a2d3r4-0009-4b09-9b09-000000000009",
+      "id": "fe985dc8-ee18-40b2-aed3-357b9f23c3dd",
       "name": "Mark Alerted",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-1312, 848],
+      "position": [
+        32,
+        176
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -190,63 +280,191 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type",  "value": "application/json" },
-            { "name": "Prefer",        "value": "return=representation" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
           ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "workflow_name", "value": "Review Campaign — Bad Review Alert" },
-            { "name": "automation",    "value": "review_campaign" },
-            { "name": "contact_name",  "value": "={{ $('Build Alert').item.json.name || $('Build Alert').item.json.email }}" },
-            { "name": "status",        "value": "success" },
-            { "name": "trigger",       "value": "scheduler" },
-            { "name": "notes",         "value": "Bad review alert sent to admin" }
+            {
+              "name": "workflow_name",
+              "value": "Review Campaign â€” Bad Review Alert"
+            },
+            {
+              "name": "automation",
+              "value": "review_campaign"
+            },
+            {
+              "name": "contact_name",
+              "value": "={{ $('Build Alert').item.json.name || $('Build Alert').item.json.email }}"
+            },
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "trigger",
+              "value": "scheduler"
+            },
+            {
+              "name": "notes",
+              "value": "Bad review alert sent to admin"
+            }
           ]
         },
         "options": {}
       },
-      "id": "b1a2d3r4-0010-4b10-9b10-000000000010",
+      "id": "e343bab4-5f1a-46ca-9e7d-4e234795364a",
       "name": "Log Execution",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-1088, 848],
+      "position": [
+        256,
+        176
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
     }
   ],
   "connections": {
-    "Check Every 15 Min":         { "main": [[{ "node": "Get Unalerted Bad Reviews", "type": "main", "index": 0 }]] },
-    "Get Unalerted Bad Reviews":  { "main": [[{ "node": "Get Campaign Details",      "type": "main", "index": 0 }]] },
-    "Get Campaign Details":       { "main": [[{ "node": "Build Alert",               "type": "main", "index": 0 }]] },
+    "Check Every 15 Min": {
+      "main": [
+        [
+          {
+            "node": "Get Unalerted Bad Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unalerted Bad Reviews": {
+      "main": [
+        [
+          {
+            "node": "Get Campaign Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Campaign Details": {
+      "main": [
+        [
+          {
+            "node": "Build Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Build Alert": {
-      "main": [[
-        { "node": "Has Admin Phone?", "type": "main", "index": 0 },
-        { "node": "Has Admin Email?", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Has Admin Phone?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Admin Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Has Admin Phone?": {
       "main": [
-        [{ "node": "SMS Admin",    "type": "main", "index": 0 }],
-        [{ "node": "Mark Alerted", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "SMS Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Alerted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SMS Admin": {
+      "main": [
+        [
+          {
+            "node": "Mark Alerted",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Has Admin Email?": {
       "main": [
-        [{ "node": "Email Admin",  "type": "main", "index": 0 }],
-        [{ "node": "Mark Alerted", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Email Admin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Alerted",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "SMS Admin":    { "main": [[{ "node": "Mark Alerted",  "type": "main", "index": 0 }]] },
-    "Email Admin":  { "main": [[{ "node": "Mark Alerted",  "type": "main", "index": 0 }]] },
-    "Mark Alerted": { "main": [[{ "node": "Log Execution", "type": "main", "index": 0 }]] }
+    "Email Admin": {
+      "main": [
+        [
+          {
+            "node": "Mark Alerted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Alerted": {
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "pinData": {},
   "meta": {
+    "templateCredsSetupCompleted": true,
     "instanceId": "5ed296676961c5ed41c639e1683078855c8f50e4c5aa1466963b063405345b3e"
   }
 }
