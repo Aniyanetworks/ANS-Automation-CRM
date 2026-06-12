@@ -12,9 +12,10 @@ const sourceColors = {
   SMS:       'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300',
   WhatsApp:  'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
   Referral:  'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  Review:    'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
   Other:     'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
 }
-const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', WhatsApp: '📱', Referral: '🤝', Other: '📋' }
+const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', WhatsApp: '📱', Referral: '🤝', Review: '⭐', Other: '📋' }
 
 const interestColors = {
   Yes: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -70,25 +71,24 @@ export default function ChatHistory() {
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [search, setSearch] = useState('')
   const [activeSessionId, setActiveSessionId] = useState(null)
-  const [confirmDelete, setConfirmDelete] = useState(null) // { sessionId, displayName }
+  const [confirmDelete, setConfirmDelete] = useState(null)
   const bottomRef = useRef(null)
 
   useEffect(() => {
     Promise.all([getAllChatSessions(), getContacts()])
       .then(([sessionData, contactData]) => {
-        setSessions(sessionData)
         const bySession = {}
         const byPhone = {}
         contactData.forEach(c => {
           if (c.session_id) bySession[c.session_id] = c
           if (c.phone) byPhone[c.phone] = c
         })
-        // For each session, resolve contact by session_id first, then phone
         const map = {}
         sessionData.forEach(s => {
           map[s.session_id] = bySession[s.session_id] || byPhone[s.phone] || null
         })
         setContactMap(map)
+        setSessions(sessionData)
       })
       .catch(console.error)
       .finally(() => setLoadingSessions(false))
@@ -178,6 +178,8 @@ export default function ChatHistory() {
             const initials = c?.avatar || getInitials(name || s.phone)
             const avatarColor = c?.avatar_color || getAvatarColor(displayName)
             const isActive = s.session_id === activeSessionId
+            // Detect review session by session_id prefix
+            const isReview = s.session_id?.startsWith('review-')
             return (
               <div
                 key={s.session_id}
@@ -192,7 +194,7 @@ export default function ChatHistory() {
                   <Trash2 size={14} />
                 </button>
                 <div className="flex items-center gap-2.5">
-                  <div className={`w-9 h-9 rounded-full ${avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                  <div className={`w-9 h-9 rounded-full ${isReview ? 'bg-amber-500' : avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -205,11 +207,15 @@ export default function ChatHistory() {
                       )}
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                      {c?.source && (
+                      {isReview ? (
+                        <span className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          ⭐ Review
+                        </span>
+                      ) : c?.source ? (
                         <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${sourceColors[c.source] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>
                           {sourceIcons[c.source] || '💬'} {c.source}
                         </span>
-                      )}
+                      ) : null}
                       {c?.service_type && (
                         <span className="text-xs text-slate-400 dark:text-slate-500 truncate">{c.service_type}</span>
                       )}
@@ -244,13 +250,17 @@ export default function ChatHistory() {
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <div className={`w-10 h-10 rounded-full ${active?.avatar_color || getAvatarColor(active?.name)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                <div className={`w-10 h-10 rounded-full ${activeSessionId?.startsWith('review-') ? 'bg-amber-500' : active?.avatar_color || getAvatarColor(active?.name)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
                   {active?.avatar || getInitials(active?.name)}
                 </div>
                 <div>
                   <div className="font-semibold text-slate-900 dark:text-white">{activeDisplayName}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {active?.source && (
+                    {activeSessionId?.startsWith('review-') ? (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        ⭐ Review Campaign
+                      </span>
+                    ) : active?.source && (
                       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${sourceColors[active.source] || 'bg-slate-100 text-slate-600'}`}>
                         {sourceIcons[active.source]} {active.source}
                       </span>
@@ -285,7 +295,7 @@ export default function ChatHistory() {
                   const isAgent = part.role === 'agent'
                   return (
                     <div key={`${msg.id || i}-${j}`} className={`flex items-end gap-2.5 ${isAgent ? 'flex-row' : 'flex-row-reverse'}`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? 'bg-blue-500' : avatarColor}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? (activeSessionId?.startsWith('review-') ? 'bg-amber-500' : 'bg-blue-500') : avatarColor}`}>
                         {isAgent ? <Bot size={14} className="text-white" /> : <User size={14} className="text-white" />}
                       </div>
                       <div className="max-w-xs sm:max-w-sm">
@@ -297,7 +307,7 @@ export default function ChatHistory() {
                           {part.text}
                         </div>
                         <div className={`text-xs text-slate-400 mt-1 ${isAgent ? 'text-left' : 'text-right'}`}>
-                          {isAgent ? '🤖 Jasica · ' : ''}{formatTime(part.timestamp)}
+                          {isAgent ? (activeSessionId?.startsWith('review-') ? '⭐ Review Bot · ' : '🤖 Jasica · ') : ''}{formatTime(part.timestamp)}
                         </div>
                       </div>
                     </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Globe, Facebook, MessageCircle, Mail, RefreshCw, Zap, CheckCircle, XCircle, Clock, ToggleLeft, ToggleRight, ExternalLink, Loader2, ChevronRight } from 'lucide-react'
+import { Globe, Facebook, MessageCircle, Mail, RefreshCw, Zap, CheckCircle, XCircle, Clock, ToggleLeft, ToggleRight, ExternalLink, Loader2, ChevronRight, Star } from 'lucide-react'
 import { getAllWorkflowExecutions } from '../services/api'
 
 const N8N_BASE = 'https://n8n.srv1300653.hstgr.cloud/webhook'
@@ -75,6 +75,24 @@ const AUTOMATION_CONFIG = [
       { id: 'SMS_3',   channel: 'SMS',   delay: '+5 days' },
     ],
   },
+  {
+    id: 'review-campaign',
+    name: 'Review Campaign',
+    type: 'Review',
+    description: 'Sends review request via SMS + Email on enrollment, then follows up at configurable intervals (Day 1, 3, 7, 15, 30, 60). Alerts admin on bad reviews and stops on submission.',
+    webhook: '',
+    workflowNames: ['Review Campaign — Follow-up Scheduler', 'Review Campaign — Bad Review Alert'],
+    automation: 'review_campaign',
+    trigger: 'Schedule (15 Min)',
+    steps: [
+      { id: 'DAY_0',  channel: 'SMS', delay: 'Day 0'   },
+      { id: 'DAY_1',  channel: 'SMS', delay: '+1 day'  },
+      { id: 'DAY_3',  channel: 'SMS', delay: '+3 days' },
+      { id: 'DAY_7',  channel: 'SMS', delay: '+7 days' },
+      { id: 'DAY_30', channel: 'SMS', delay: '+30 days' },
+    ],
+    stepsNote: 'Schedule is dynamic — configure per campaign',
+  },
 ]
 
 const automationIcons = {
@@ -83,6 +101,7 @@ const automationIcons = {
   SMS: MessageCircle,
   Email: Mail,
   FollowUp: RefreshCw,
+  Review: Star,
 }
 
 const gradients = {
@@ -91,6 +110,7 @@ const gradients = {
   SMS: 'from-teal-500 to-emerald-500',
   Email: 'from-purple-500 to-fuchsia-500',
   FollowUp: 'from-amber-500 to-orange-500',
+  Review: 'from-amber-400 to-yellow-500',
 }
 
 const cardBorders = {
@@ -99,10 +119,14 @@ const cardBorders = {
   SMS: 'border-teal-200 dark:border-teal-800',
   Email: 'border-purple-200 dark:border-purple-800',
   FollowUp: 'border-amber-200 dark:border-amber-800',
+  Review: 'border-yellow-200 dark:border-yellow-800',
 }
 
-function computeStats(executions, workflowNames) {
-  const typeExecs = executions.filter(e => workflowNames.includes(e.workflow_name))
+function computeStats(executions, workflowNames, automationType) {
+  const typeExecs = executions.filter(e =>
+    workflowNames.includes(e.workflow_name) ||
+    (automationType && e.automation === automationType)
+  )
   const total = typeExecs.length
   const errors = typeExecs.filter(e => e.status === 'error').length
   const successRate = total ? Math.round((((total - errors) / total) * 100) * 10) / 10 : 0
@@ -159,8 +183,12 @@ function AutomationCard({ config, stats, status, onToggle }) {
         {config.steps && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Sequence · {config.steps.length} Steps</span>
-              <span className="text-xs text-slate-400 dark:text-slate-500">~11 day journey</span>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                Sequence · {config.steps.length}{config.stepsNote ? '+' : ''} Steps
+              </span>
+              {config.stepsNote
+                ? <span className="text-xs text-amber-500 dark:text-amber-400 italic">{config.stepsNote}</span>
+                : <span className="text-xs text-slate-400 dark:text-slate-500">~11 day journey</span>}
             </div>
             <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
               {config.steps.map((step, i) => (
@@ -168,11 +196,13 @@ function AutomationCard({ config, stats, status, onToggle }) {
                   {i > 0 && <ChevronRight size={10} className="text-slate-300 dark:text-slate-600" />}
                   <div className="flex flex-col items-center gap-0.5">
                     <span className={`text-xs px-2 py-1 rounded-lg font-medium flex items-center gap-1 ${
-                      step.channel === 'SMS'
-                        ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300'
-                        : 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                      config.type === 'Review'
+                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
+                        : step.channel === 'SMS'
+                          ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300'
+                          : 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
                     }`}>
-                      {step.channel === 'SMS' ? <MessageCircle size={10} /> : <Mail size={10} />}
+                      {config.type === 'Review' ? <Star size={10} /> : step.channel === 'SMS' ? <MessageCircle size={10} /> : <Mail size={10} />}
                       {step.id}
                     </span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">{step.delay}</span>
@@ -319,7 +349,7 @@ export default function Automations() {
             <AutomationCard
               key={config.id}
               config={config}
-              stats={computeStats(executions, config.workflowNames)}
+              stats={computeStats(executions, config.workflowNames, config.automation)}
               status={statuses[config.id]}
               onToggle={toggleStatus}
             />
