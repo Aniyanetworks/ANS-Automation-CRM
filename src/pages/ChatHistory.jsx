@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Search, MessageSquare, Bot, User, ChevronLeft, Loader2, Trash2 } from 'lucide-react'
 import { getContacts, getChatMessages, getChatMessagesByPhone, getAllChatSessions, deleteChatSession } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -16,6 +16,7 @@ const sourceColors = {
   Other:     'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
 }
 const sourceIcons = { Website: '🌐', Facebook: '📘', Instagram: '📸', Email: '📧', SMS: '💬', WhatsApp: '📱', Referral: '🤝', Review: '⭐', Other: '📋' }
+
 
 const interestColors = {
   Yes: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
@@ -71,9 +72,11 @@ export default function ChatHistory() {
   const [loadingSessions, setLoadingSessions] = useState(true)
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [search, setSearch] = useState('')
+  const [messageFilter, setMessageFilter] = useState('All')
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const bottomRef = useRef(null)
+
 
   useEffect(() => {
     Promise.all([getAllChatSessions(), getContacts()])
@@ -106,6 +109,7 @@ export default function ChatHistory() {
 
   useEffect(() => {
     if (!activeSessionId) { setMessages([]); return }
+    setMessageFilter('All')
     setLoadingMessages(true)
     const session = sessions.find(s => s.session_id === activeSessionId)
     const phone = contactMap[activeSessionId]?.phone || session?.phone
@@ -121,16 +125,52 @@ export default function ChatHistory() {
   }, [messages])
 
   const filtered = sessions.filter(s => {
-    const q = search.toLowerCase()
-    if (!q) return true
     const c = contactMap[s.session_id]
-    return (
+    const q = search.toLowerCase()
+    return !q || (
       (c?.name || '').toLowerCase().includes(q) ||
       (c?.service_type || '').toLowerCase().includes(q) ||
       (c?.source || '').toLowerCase().includes(q) ||
       s.session_id.toLowerCase().includes(q)
     )
   })
+
+  // Determine the type label for a message part
+  function getMsgType(part) {
+    const text = part.text || ''
+    if (part.session_id?.startsWith('review-')) {
+      return text.startsWith('📧') ? 'Review Email' : 'Review SMS'
+    }
+    if (text.startsWith('📧')) return 'Email'
+    return 'Chat'
+  }
+
+  function getMsgLabel(part) {
+    const type = getMsgType(part)
+    if (type === 'Review Email') return '📧 Review Email · '
+    if (type === 'Review SMS') return '📱 Review SMS · '
+    if (type === 'Email') return '📧 Email · '
+    return '🤖 Jasica · '
+  }
+
+  function getMsgAvatarColor(part) {
+    const type = getMsgType(part)
+    if (type === 'Review Email') return 'bg-purple-500'
+    if (type === 'Review SMS') return 'bg-amber-500'
+    if (type === 'Email') return 'bg-purple-500'
+    return 'bg-blue-500'
+  }
+
+  // Available message filter types for the current conversation
+  const availableMsgFilters = useMemo(() => {
+    if (!messages.length) return []
+    const types = new Set()
+    messages.forEach(msg => {
+      parseMessageParts(msg).forEach(part => types.add(getMsgType(part)))
+    })
+    if (types.size <= 1) return [] // no point showing filters for a single type
+    return ['All', ...Array.from(types)]
+  }, [messages])
 
   function handleDeleteSession(e, sessionId, displayName) {
     e.stopPropagation()
@@ -279,9 +319,38 @@ export default function ChatHistory() {
                   </div>
                 </div>
               </div>
-              <div className="text-right hidden sm:block">
-                <div className="text-xs text-slate-400">Session ID</div>
-                <div className="text-xs font-mono text-slate-600 dark:text-slate-400">{activeSessionId}</div>
+              <div className="flex flex-col items-end gap-1.5">
+                {availableMsgFilters.length > 0 && (
+                  <div className="flex gap-1 flex-wrap justify-end">
+                    {availableMsgFilters.map(f => {
+                      const pillColors = {
+                        All:           'bg-blue-600 text-white',
+                        Chat:          'bg-slate-600 text-white',
+                        Email:         'bg-purple-600 text-white',
+                        'Review SMS':  'bg-amber-500 text-white',
+                        'Review Email':'bg-purple-600 text-white',
+                      }
+                      const pillIcons = { All: '', Chat: '💬', Email: '📧', 'Review SMS': '📱', 'Review Email': '📧' }
+                      return (
+                        <button
+                          key={f}
+                          onClick={() => setMessageFilter(f)}
+                          className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                            messageFilter === f
+                              ? (pillColors[f] || 'bg-blue-600 text-white')
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600'
+                          }`}
+                        >
+                          {pillIcons[f] && <span>{pillIcons[f]}</span>}{f}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="text-right hidden sm:block">
+                  <div className="text-xs text-slate-400">Session ID</div>
+                  <div className="text-xs font-mono text-slate-600 dark:text-slate-400">{activeSessionId}</div>
+                </div>
               </div>
             </div>
 
@@ -300,12 +369,13 @@ export default function ChatHistory() {
               )}
               {!loadingMessages && messages.flatMap((msg, i) => {
                 const avatarColor = active?.avatar_color || getAvatarColor(active?.name)
-                return parseMessageParts(msg).map((part, j) => {
+                return parseMessageParts(msg).filter(part =>
+                  messageFilter === 'All' || getMsgType(part) === messageFilter
+                ).map((part, j) => {
                   const isAgent = part.role === 'agent'
-                  const isReviewMsg = part.session_id?.startsWith('review-')
                   return (
                     <div key={`${msg.id || i}-${j}`} className={`flex items-end gap-2.5 ${isAgent ? 'flex-row' : 'flex-row-reverse'}`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? (isReviewMsg ? 'bg-amber-500' : 'bg-blue-500') : avatarColor}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-1 ${isAgent ? getMsgAvatarColor(part) : avatarColor}`}>
                         {isAgent ? <Bot size={14} className="text-white" /> : <User size={14} className="text-white" />}
                       </div>
                       <div className="max-w-xs sm:max-w-sm">
@@ -317,7 +387,7 @@ export default function ChatHistory() {
                           {part.text}
                         </div>
                         <div className={`text-xs text-slate-400 mt-1 ${isAgent ? 'text-left' : 'text-right'}`}>
-                          {isAgent ? (isReviewMsg ? '⭐ Review Bot · ' : '🤖 Jasica · ') : ''}{formatTime(part.timestamp)}
+                          {isAgent ? getMsgLabel(part) : ''}{formatTime(part.timestamp)}
                         </div>
                       </div>
                     </div>
