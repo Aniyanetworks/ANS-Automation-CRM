@@ -1,10 +1,90 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart, Star } from 'lucide-react'
-import { getContacts, updateContact, createContact, deleteContact, deleteContacts, getNurtureCampaigns, createNurtureClients, getReviewCampaigns, createReviewLeads } from '../services/api'
+import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart, Upload, Download, FolderPlus, Send, Tag, Star } from 'lucide-react'
+import {
+  getContacts, updateContact, createContact, createContacts, deleteContact, deleteContacts,
+  getNurtureCampaigns, createNurtureClients,
+  getContactGroups, getGroupMemberships, createContactGroup, deleteContactGroup, addContactsToGroup,
+  getEmailCampaigns, createEmailLeads,
+  getReviewCampaigns, createReviewLeads,
+} from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
 import { useAuth } from '../context/AuthContext'
+
+// ── CSV helpers (contact bulk import) ──────────────────────────────────────────
+
+const CONTACT_CSV_COLUMNS = ['name', 'email', 'phone', 'source', 'service_type', 'lead_status', 'interest', 'summary', 'message', 'client_note']
+
+function parseCsvRows(text) {
+  const rows = []
+  let row = [], field = '', inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++ } else inQuotes = false }
+      else field += ch
+    } else {
+      if (ch === '"') inQuotes = true
+      else if (ch === ',') { row.push(field); field = '' }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+      else if (ch !== '\r') field += ch
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row) }
+  return rows
+}
+
+function parseContactsCsv(text) {
+  const rows = parseCsvRows(text)
+  if (rows.length === 0) return []
+  const header = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_'))
+  const idx = {}
+  CONTACT_CSV_COLUMNS.forEach(col => { idx[col] = header.indexOf(col) })
+  // If no recognizable header, treat the first row as data in column order.
+  const hasHeader = idx.name >= 0 || idx.email >= 0
+  const get = (r, col, pos) => {
+    const at = hasHeader ? idx[col] : pos
+    return at >= 0 ? (r[at] || '').trim() : ''
+  }
+  const out = []
+  for (let i = hasHeader ? 1 : 0; i < rows.length; i++) {
+    const r = rows[i]
+    if (r.every(c => !c || !c.trim())) continue
+    const name = get(r, 'name', 0)
+    const email = get(r, 'email', 1)
+    if (!name && !email) continue
+    out.push({
+      name,
+      email,
+      phone: get(r, 'phone', 2),
+      source: get(r, 'source', 3) || 'Website',
+      service_type: get(r, 'service_type', 4),
+      lead_status: get(r, 'lead_status', 5) || 'New Lead',
+      interest: get(r, 'interest', 6) || 'Pending',
+      summary: get(r, 'summary', 7),
+      message: get(r, 'message', 8),
+      client_note: get(r, 'client_note', 9),
+    })
+  }
+  return out
+}
+
+function downloadContactTemplate() {
+  const header = CONTACT_CSV_COLUMNS.join(',')
+  const ex1 = 'John Doe,john@example.com,4165551234,Website,WhatsApp Automation,New Lead,Pending,Wants to automate support,Enquiry from website,'
+  const ex2 = 'Jane Smith,jane@example.com,4165555678,Facebook,Booking Automation,Contacted,Yes,Needs booking + reminders,,Past project delivered'
+  const csv = [header, ex1, ex2].join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'contacts-template.csv'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
 
 const sourceColors = {
   Website:   'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -480,6 +560,263 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
   )
 }
 
+const fieldCls = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
+
+function BulkImportModal({ onClose, onImported }) {
+  const notify = useNotify()
+  const fileRef = useRef(null)
+  const [staged, setStaged] = useState([])
+  const [fileName, setFileName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileName(file.name)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const rows = parseContactsCsv(String(reader.result))
+      if (rows.length === 0) notify('No valid rows found — each row needs at least a name or email.', 'error')
+      setStaged(rows)
+    }
+    reader.onerror = () => notify('Could not read the file.', 'error')
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  async function submit() {
+    if (staged.length === 0) return
+    setSaving(true)
+    try {
+      const now = new Date().toISOString()
+      const rows = staged.map(c => ({
+        ...c,
+        last_action_date: now,
+        avatar: getInitials(c.name || c.email),
+        avatar_color: getAvatarColor(c.name || c.email),
+      }))
+      const created = await createContacts(rows)
+      onImported(created)
+      notify(`Imported ${created.length} contact${created.length !== 1 ? 's' : ''}.`, 'success')
+      onClose()
+    } catch (err) {
+      notify('Import failed: ' + err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[88vh]">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white">Bulk Import Contacts</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+        </div>
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium text-slate-800 dark:text-slate-200">Step 1 — Download the template</div>
+              <div className="text-xs text-slate-400 mt-0.5">CSV columns: {CONTACT_CSV_COLUMNS.join(', ')}</div>
+            </div>
+            <button onClick={downloadContactTemplate} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors flex-shrink-0">
+              <Download size={14} /> Template
+            </button>
+          </div>
+          <div>
+            <div className="text-sm font-medium text-slate-800 dark:text-slate-200 mb-2">Step 2 — Upload your filled CSV</div>
+            <button onClick={() => fileRef.current?.click()} className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl text-sm text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-500 transition-colors">
+              <Upload size={16} /> {fileName ? `Replace file (${fileName})` : 'Choose CSV file'}
+            </button>
+            <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+          </div>
+          {staged.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">{staged.length} contact{staged.length !== 1 ? 's' : ''} ready</div>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl max-h-56 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-700">
+                {staged.map((c, i) => (
+                  <div key={i} className="px-4 py-2 flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name || <span className="text-slate-400 italic">No name</span>}</div>
+                      <div className="text-xs text-slate-400 truncate">{[c.email, c.phone, c.service_type].filter(Boolean).join(' · ') || '—'}</div>
+                    </div>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">{c.lead_status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex gap-2">
+          <button onClick={submit} disabled={saving || staged.length === 0} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Import {staged.length || ''} Contact{staged.length !== 1 ? 's' : ''}
+          </button>
+          <button onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddToGroupModal({ contactIds, groups, onClose, onDone }) {
+  const notify = useNotify()
+  const [mode, setMode] = useState(groups.length ? 'existing' : 'new')
+  const [groupId, setGroupId] = useState(groups[0]?.id || '')
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    setSaving(true)
+    try {
+      let gid = groupId
+      if (mode === 'new') {
+        if (!newName.trim()) { setSaving(false); return }
+        const g = await createContactGroup(newName.trim())
+        gid = g.id
+      }
+      if (!gid) { setSaving(false); return }
+      await addContactsToGroup(gid, contactIds)
+      onDone(contactIds.length)
+      onClose()
+    } catch (err) {
+      notify('Failed to add to group: ' + err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2"><FolderPlus size={16} className="text-blue-500" /> Add to Group</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Adding {contactIds.length} contact{contactIds.length !== 1 ? 's' : ''} to a group.</p>
+          <div className="flex gap-2">
+            <button onClick={() => setMode('existing')} disabled={!groups.length} className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors disabled:opacity-40 ${mode === 'existing' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>Existing group</button>
+            <button onClick={() => setMode('new')} className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${mode === 'new' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'}`}>New group</button>
+          </div>
+          {mode === 'existing' ? (
+            <select value={groupId} onChange={e => setGroupId(e.target.value)} className={fieldCls}>
+              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          ) : (
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="New group name (e.g. Toronto Clients)" className={fieldCls} autoFocus />
+          )}
+          <div className="flex gap-2 pt-1">
+            <button onClick={submit} disabled={saving || (mode === 'new' ? !newName.trim() : !groupId)} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <FolderPlus size={14} />} Add to Group
+            </button>
+            <button onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PushGroupModal({ group, members, onClose, onDone }) {
+  const notify = useNotify()
+  const [campaigns, setCampaigns] = useState([])
+  const [campaignId, setCampaignId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getEmailCampaigns()
+      .then(all => {
+        setCampaigns(all)
+        if (all.length) setCampaignId(all[0].id)
+      })
+      .catch(e => notify('Failed to load campaigns: ' + e.message, 'error'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const withEmail = members.filter(m => m.email && m.email.trim())
+  const skipped = members.length - withEmail.length
+  const campaign = campaigns.find(c => c.id === campaignId)
+  const isNurture = campaign && campaign.type === 'nurture'
+
+  async function submit() {
+    if (!campaign || withEmail.length === 0) return
+    setSaving(true)
+    try {
+      const now = new Date().toISOString()
+      if (isNurture) {
+        const rows = withEmail.map(m => ({
+          campaign_id: campaign.id,
+          contact_id: m.id,
+          name: m.name || '',
+          email: m.email,
+          note: m.client_note || '',
+          status: 'Active',
+          next_send_at: now,
+          emails_sent: 0,
+        }))
+        await createNurtureClients(rows)
+      } else {
+        const rows = withEmail.map(m => ({
+          campaign_id: campaign.id,
+          name: m.name || '',
+          email: m.email,
+          service: m.service_type || '',
+          status: 'Active',
+          current_step: 0,
+          next_send_at: now,
+          replied: false,
+          emails_sent: 0,
+        }))
+        await createEmailLeads(rows)
+      }
+      onDone(withEmail.length, campaign.name)
+      onClose()
+    } catch (err) {
+      notify('Failed to push to campaign: ' + err.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Send size={16} className="text-blue-500" /> Push “{group.name}” to Campaign</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-slate-400"><Loader2 size={20} className="animate-spin mr-2" /> Loading campaigns...</div>
+          ) : campaigns.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">No email campaign exists yet. Create one on the <span className="font-medium text-slate-700 dark:text-slate-200">Email Campaigns</span> page first.</div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Campaign</label>
+                <select value={campaignId} onChange={e => setCampaignId(e.target.value)} className={fieldCls}>
+                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} {(c.type || 'outreach') === 'nurture' ? '— Nurture' : '— Outreach'}</option>)}
+                </select>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-600 dark:text-slate-300">
+                {withEmail.length} of {members.length} group member{members.length !== 1 ? 's' : ''} will be enrolled as {isNurture ? 'nurture clients' : 'leads'}.
+                {skipped > 0 && <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">{skipped} skipped (no email address).</div>}
+              </div>
+            </>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button onClick={submit} disabled={saving || loading || campaigns.length === 0 || withEmail.length === 0} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Push {withEmail.length || ''} to Campaign
+            </button>
+            <button onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ReviewEnrollModal({ contacts, onClose, onDone }) {
   const notify = useNotify()
   const [campaigns, setCampaigns] = useState([])
@@ -564,6 +901,7 @@ function ReviewEnrollModal({ contacts, onClose, onDone }) {
   )
 }
 
+
 export default function Contacts() {
   const notify = useNotify()
   const { isDemo } = useAuth()
@@ -587,8 +925,20 @@ export default function Contacts() {
   const [nurtureOpen, setNurtureOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
+  const [groups, setGroups] = useState([])
+  const [memberships, setMemberships] = useState([]) // [{ group_id, contact_id }]
+  const [filterGroup, setFilterGroup] = useState('All')
+  const [importOpen, setImportOpen] = useState(false)
+  const [addGroupOpen, setAddGroupOpen] = useState(false)
+  const [pushGroup, setPushGroup] = useState(null)
+  const [confirmGroup, setConfirmGroup] = useState(null)
 
   const pendingContactId = useRef(null)
+
+  function reloadGroups() {
+    getContactGroups().then(setGroups).catch(() => {})
+    getGroupMemberships().then(setMemberships).catch(() => {})
+  }
 
   useEffect(() => {
     if (location.state?.openCreate) {
@@ -606,9 +956,11 @@ export default function Contacts() {
   }, [location.state])
 
   useEffect(() => {
-    getContacts()
-      .then(data => {
+    Promise.all([getContacts(), getContactGroups(), getGroupMemberships()])
+      .then(([data, grps, mems]) => {
         setContacts(data)
+        setGroups(grps)
+        setMemberships(mems)
         if (pendingContactId.current) {
           const found = data.find(c => c.id === pendingContactId.current)
           if (found) setSelected(found)
@@ -621,6 +973,24 @@ export default function Contacts() {
 
   function handleCreate(created) {
     setContacts(prev => [created, ...prev])
+  }
+
+  function handleImported(created) {
+    setContacts(prev => [...created, ...prev])
+  }
+
+  async function executeDeleteGroup() {
+    if (!confirmGroup) return
+    try {
+      await deleteContactGroup(confirmGroup.id)
+      setGroups(prev => prev.filter(g => g.id !== confirmGroup.id))
+      setMemberships(prev => prev.filter(m => m.group_id !== confirmGroup.id))
+      if (filterGroup === confirmGroup.id) setFilterGroup('All')
+    } catch (err) {
+      notify('Failed to delete group: ' + err.message, 'error')
+    } finally {
+      setConfirmGroup(null)
+    }
   }
 
   function handleSave(updated) {
@@ -657,6 +1027,14 @@ export default function Contacts() {
     })
   }
 
+  const groupMemberIds = filterGroup === 'All'
+    ? null
+    : new Set(memberships.filter(m => m.group_id === filterGroup).map(m => m.contact_id))
+  const groupCounts = groups.reduce((acc, g) => {
+    acc[g.id] = memberships.filter(m => m.group_id === g.id).length
+    return acc
+  }, {})
+
   const filtered = contacts
     .filter(c => {
       const q = search.toLowerCase()
@@ -668,7 +1046,8 @@ export default function Contacts() {
       const matchInterest = filterInterest === 'All' || c.interest === filterInterest
       const matchSource = filterSource === 'All' || c.source === filterSource
       const matchStatus = filterStatus === 'All' || c.lead_status === filterStatus
-      return matchSearch && matchInterest && matchSource && matchStatus
+      const matchGroup = !groupMemberIds || groupMemberIds.has(c.id)
+      return matchSearch && matchInterest && matchSource && matchStatus && matchGroup
     })
     .sort((a, b) => {
       let va = a[sortKey], vb = b[sortKey]
@@ -759,24 +1138,38 @@ export default function Contacts() {
         {selectedIds.size > 0 && (
           <>
             <span className="text-sm font-medium text-blue-600 dark:text-blue-400">{selectedIds.size} selected</span>
-            <button
-              onClick={() => setNurtureOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-            >
-              <Heart size={14} /> Add to Nurture
-            </button>
-            <button
-              onClick={() => setReviewOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-            >
-              <Star size={14} /> Add to Review
-            </button>
-            <button
-              onClick={() => setConfirmPending({ type: 'bulk' })}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
-            >
-              <Trash2 size={14} /> Delete {selectedIds.size}
-            </button>
+            {!isDemo && (
+              <button
+                onClick={() => setAddGroupOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <FolderPlus size={14} /> Add to Group
+              </button>
+            )}
+            {!isDemo && (
+              <button
+                onClick={() => setNurtureOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <Heart size={14} /> Add to Nurture
+              </button>
+            )}
+            {!isDemo && (
+              <button
+                onClick={() => setReviewOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <Star size={14} /> Add to Review
+              </button>
+            )}
+            {!isDemo && (
+              <button
+                onClick={() => setConfirmPending({ type: 'bulk' })}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <Trash2 size={14} /> Delete {selectedIds.size}
+              </button>
+            )}
             <button
               onClick={() => setSelectedIds(new Set())}
               className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -787,6 +1180,14 @@ export default function Contacts() {
         )}
         {!isDemo && (
           <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm flex-shrink-0"
+          >
+            <Upload size={15} /> Import CSV
+          </button>
+        )}
+        {!isDemo && (
+          <button
             onClick={() => setCreating(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex-shrink-0"
           >
@@ -794,6 +1195,44 @@ export default function Contacts() {
           </button>
         )}
       </div>
+
+      {/* Groups bar */}
+      {groups.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="flex items-center gap-1 text-xs font-semibold text-slate-400 uppercase tracking-wide"><Tag size={12} /> Groups</span>
+          <button
+            onClick={() => setFilterGroup('All')}
+            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterGroup === 'All' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+          >
+            All
+          </button>
+          {groups.map(g => (
+            <button
+              key={g.id}
+              onClick={() => setFilterGroup(g.id)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterGroup === g.id ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              {g.name} <span className={filterGroup === g.id ? 'text-white/70' : 'text-slate-400'}>· {groupCounts[g.id] || 0}</span>
+            </button>
+          ))}
+          {filterGroup !== 'All' && !isDemo && (
+            <div className="flex items-center gap-2 ml-1">
+              <button
+                onClick={() => setPushGroup(groups.find(g => g.id === filterGroup))}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"
+              >
+                <Send size={12} /> Push to Campaign
+              </button>
+              <button
+                onClick={() => setConfirmGroup(groups.find(g => g.id === filterGroup))}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <Trash2 size={12} /> Delete Group
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -917,6 +1356,28 @@ export default function Contacts() {
           onDone={(n) => { setSelectedIds(new Set()); notify(`Enrolled ${n} client${n !== 1 ? 's' : ''} into the nurture campaign.`, 'success') }}
         />
       )}
+      {importOpen && (
+        <BulkImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={handleImported}
+        />
+      )}
+      {addGroupOpen && (
+        <AddToGroupModal
+          contactIds={[...selectedIds]}
+          groups={groups}
+          onClose={() => setAddGroupOpen(false)}
+          onDone={(n) => { setSelectedIds(new Set()); reloadGroups(); notify(`Added ${n} contact${n !== 1 ? 's' : ''} to the group.`, 'success') }}
+        />
+      )}
+      {pushGroup && (
+        <PushGroupModal
+          group={pushGroup}
+          members={contacts.filter(c => memberships.some(m => m.group_id === pushGroup.id && m.contact_id === c.id))}
+          onClose={() => setPushGroup(null)}
+          onDone={(n, campaignName) => notify(`Pushed ${n} contact${n !== 1 ? 's' : ''} from “${pushGroup.name}” into “${campaignName}”.`, 'success')}
+        />
+      )}
       {reviewOpen && (
         <ReviewEnrollModal
           contacts={contacts.filter(c => selectedIds.has(c.id))}
@@ -924,6 +1385,14 @@ export default function Contacts() {
           onDone={(n) => { setSelectedIds(new Set()); notify(`Enrolled ${n} contact${n !== 1 ? 's' : ''} into the review campaign.`, 'success') }}
         />
       )}
+      <ConfirmDialog
+        open={!!confirmGroup}
+        title="Delete Group"
+        message={`Delete the group “${confirmGroup?.name}”? The contacts themselves are not deleted.`}
+        confirmLabel="Delete Group"
+        onConfirm={executeDeleteGroup}
+        onCancel={() => setConfirmGroup(null)}
+      />
     </div>
   )
 }

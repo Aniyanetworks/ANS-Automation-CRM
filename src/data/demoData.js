@@ -213,13 +213,17 @@ export const demoCampaigns = [
     id: DEMO_OUTREACH_CAMPAIGN, name: 'Q2 Web Design Outreach', type: 'outreach', status: 'Active',
     from_name: 'Aniya Networks', from_email: 'hello@aniyanetworks.net',
     ai_reply_prompt: 'You are a helpful sales assistant for Aniya Network Solutions. Reply warmly, answer questions, and gently steer toward booking a call. Keep it short (2-4 sentences).',
-    interval_days: 30, interval_unit: 'days', created_at: '2026-06-01T09:00:00Z',
+    interval_days: 30, interval_unit: 'days',
+    daily_limit: 40, send_days: '1,2,3,4,5', send_start_hour: 9, send_end_hour: 18,
+    created_at: '2026-06-01T09:00:00Z',
   },
   {
     id: DEMO_NURTURE_CAMPAIGN, name: 'Past Clients — Monthly Check-in', type: 'nurture', status: 'Active',
     from_name: 'Manam Parvez', from_email: 'manam@aniyanetworks.net',
     ai_reply_prompt: 'You are writing to a PAST client to maintain the relationship. Warm, genuine check-ins about how they and their business are doing. Never a sales pitch.',
-    interval_days: 30, interval_unit: 'days', created_at: '2026-05-15T09:00:00Z',
+    interval_days: 30, interval_unit: 'days',
+    daily_limit: 50, send_days: '1,2,3,4,5,6,7', send_start_hour: 0, send_end_hour: 24,
+    created_at: '2026-05-15T09:00:00Z',
   },
 ]
 
@@ -248,6 +252,25 @@ export const demoNurtureClients = {
     { id: 'd-n02', campaign_id: DEMO_NURTURE_CAMPAIGN, contact_id: 'd-c08', name: 'Robert Mensah', email: 'rob.mensah@retailgroup.ca', note: 'Delivered a 3-location CRM rollout. Very happy — great reference candidate.', status: 'Active', next_send_at: '2026-07-12T09:00:00Z', last_sent_at: '2026-06-12T09:00:00Z', last_message: 'Hi Robert! Hope all three locations are humming along. I still remember how smoothly the CRM rollout went — how is the team finding it these days?', emails_sent: 1, created_at: '2026-05-15T09:05:00Z' },
   ],
 }
+
+// ─── CONTACT GROUPS ───────────────────────────────────────────────────────────
+
+export const demoGroups = [
+  { id: 'd-g01', name: 'Hot Prospects', created_at: '2026-06-06T09:00:00Z' },
+  { id: 'd-g02', name: 'Past Clients', created_at: '2026-05-20T09:00:00Z' },
+  { id: 'd-g03', name: 'Booking Automation Leads', created_at: '2026-06-04T09:00:00Z' },
+]
+
+export const demoGroupMembers = [
+  { group_id: 'd-g01', contact_id: 'd-c01' },
+  { group_id: 'd-g01', contact_id: 'd-c06' },
+  { group_id: 'd-g01', contact_id: 'd-c10' },
+  { group_id: 'd-g02', contact_id: 'd-c08' },
+  { group_id: 'd-g02', contact_id: 'd-c12' },
+  { group_id: 'd-g03', contact_id: 'd-c03' },
+  { group_id: 'd-g03', contact_id: 'd-c09' },
+  { group_id: 'd-g03', contact_id: 'd-c12' },
+]
 
 // ─── DASHBOARD STATS ──────────────────────────────────────────────────────────
 

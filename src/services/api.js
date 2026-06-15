@@ -68,6 +68,78 @@ export async function deleteContacts(ids) {
   if (error) throw error
 }
 
+export async function createContacts(contacts) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('contacts')
+    .insert(contacts)
+    .select()
+  if (error) throw error
+  return data
+}
+
+// ─── CONTACT GROUPS ──────────────────────────────────────────────────────────
+
+export async function getContactGroups() {
+  if (isDemo()) return demo.demoGroups
+  const { data, error } = await supabase
+    .from('contact_groups')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getGroupMemberships() {
+  if (isDemo()) return demo.demoGroupMembers
+  const { data, error } = await supabase
+    .from('contact_group_members')
+    .select('group_id, contact_id')
+  if (error) throw error
+  return data
+}
+
+export async function createContactGroup(name) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('contact_groups')
+    .insert({ name })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteContactGroup(id) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('contact_groups')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function addContactsToGroup(groupId, contactIds) {
+  blockIfDemo()
+  const rows = contactIds.map(cid => ({ group_id: groupId, contact_id: cid }))
+  const { data, error } = await supabase
+    .from('contact_group_members')
+    .upsert(rows, { onConflict: 'group_id,contact_id', ignoreDuplicates: true })
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function removeContactsFromGroup(groupId, contactIds) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('contact_group_members')
+    .delete()
+    .eq('group_id', groupId)
+    .in('contact_id', contactIds)
+  if (error) throw error
+}
+
 // ─── CHAT MESSAGES ───────────────────────────────────────────────────────────
 
 export async function getChatMessages(sessionId) {
@@ -336,6 +408,16 @@ export async function deleteEmailLead(id) {
   if (error) throw error
 }
 
+export async function getAllEmailLeads() {
+  if (isDemo()) return Object.values(demo.demoLeads).flat()
+  const { data, error } = await supabase
+    .from('email_leads')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
 // ─── CLIENT NURTURE ──────────────────────────────────────────────────────────
 
 export async function getNurtureCampaigns() {
@@ -389,6 +471,16 @@ export async function deleteNurtureClient(id) {
     .delete()
     .eq('id', id)
   if (error) throw error
+}
+
+export async function getAllNurtureClients() {
+  if (isDemo()) return Object.values(demo.demoNurtureClients).flat()
+  const { data, error } = await supabase
+    .from('nurture_clients')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
 }
 
 // ─── REVIEW CAMPAIGNS ────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Mail, Plus, X, Loader2, Trash2, Users, Send, ChevronRight,
   Clock, CheckCircle, MessageSquareReply, Pause, Play, Sparkles, Save, Upload, Heart,
+  Bold, Italic, Underline, List, ListOrdered, Link2, Eraser,
 } from 'lucide-react'
 import {
   getEmailCampaigns, createEmailCampaign, updateEmailCampaign, deleteEmailCampaign,
@@ -27,11 +28,65 @@ const DEFAULT_PROMPT = `You are a helpful sales assistant for Aniya Network Solu
 
 const DEFAULT_NURTURE_PROMPT = `You are writing on behalf of Aniya Network Solutions to a PAST client. Write a warm, genuine relationship check-in: ask how they and their business are doing, and reference our past work together using the note provided. This is NOT a sales pitch — never promote services, pricing, or ask for new business. Keep it short, personal, and human (3-5 sentences).`
 
+const WEEKDAYS = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [7, 'Sun']]
+
+function hourLabel(h) {
+  const hh = ((h % 24) + 24) % 24
+  if (hh === 0) return '12 AM'
+  if (hh === 12) return '12 PM'
+  return hh < 12 ? `${hh} AM` : `${hh - 12} PM`
+}
+
+function toggleDayCsv(csv, n) {
+  const set = new Set((csv || '').split(',').map(x => parseInt(x.trim(), 10)).filter(Boolean))
+  set.has(n) ? set.delete(n) : set.add(n)
+  return [...set].sort((a, b) => a - b).join(',')
+}
+
+function SendScheduleControls({ daily, days, startH, endH, onDaily, onDays, onStart, onEnd }) {
+  const dayset = new Set((days || '').split(',').map(x => parseInt(x.trim(), 10)).filter(Boolean))
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Max emails per day</label>
+        <input type="number" min="1" value={daily} onChange={e => onDaily(e.target.value)} className={`${inputCls} max-w-[8rem]`} />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sending days</label>
+        <div className="flex flex-wrap gap-1.5">
+          {WEEKDAYS.map(([n, lbl]) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onDays(toggleDayCsv(days, n))}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${dayset.has(n) ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Sending time window</label>
+        <div className="flex items-center gap-2">
+          <select value={startH} onChange={e => onStart(e.target.value)} className={inputCls}>
+            {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hourLabel(h)}</option>)}
+          </select>
+          <span className="text-xs text-slate-400">to</span>
+          <select value={endH} onChange={e => onEnd(e.target.value)} className={inputCls}>
+            {Array.from({ length: 24 }, (_, h) => <option key={h + 1} value={h + 1}>{hourLabel(h + 1)}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Create Campaign Modal ─────────────────────────────────────────────────────
 
 function CampaignModal({ onClose, onCreate }) {
   const notify = useNotify()
-  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, interval_unit: 'days', ai_reply_prompt: DEFAULT_PROMPT })
+  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, interval_unit: 'days', daily_limit: 50, send_days: '1,2,3,4,5', send_start_hour: 9, send_end_hour: 18, ai_reply_prompt: DEFAULT_PROMPT })
   const [saving, setSaving] = useState(false)
 
   const isNurture = form.type === 'nurture'
@@ -57,6 +112,9 @@ function CampaignModal({ onClose, onCreate }) {
       const created = await createEmailCampaign({
         ...form,
         interval_days: Number(form.interval_days) || 30,
+        daily_limit: Number(form.daily_limit) || 50,
+        send_start_hour: Number(form.send_start_hour) || 0,
+        send_end_hour: Number(form.send_end_hour) || 24,
         status: isNurture ? 'Active' : 'Paused',
       })
       onCreate(created)
@@ -122,6 +180,19 @@ function CampaignModal({ onClose, onCreate }) {
               <p className="text-xs text-slate-400 mt-1">First check-in fires this long after a client is enrolled, then repeats. 30 days = monthly.</p>
             </div>
           )}
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Sending Schedule</div>
+            <SendScheduleControls
+              daily={form.daily_limit}
+              days={form.send_days}
+              startH={form.send_start_hour}
+              endH={form.send_end_hour}
+              onDaily={v => setForm(f => ({ ...f, daily_limit: v }))}
+              onDays={v => setForm(f => ({ ...f, send_days: v }))}
+              onStart={v => setForm(f => ({ ...f, send_start_hour: v }))}
+              onEnd={v => setForm(f => ({ ...f, send_end_hour: v }))}
+            />
+          </div>
           <div>
             <label className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
               <Sparkles size={12} className="text-violet-500" /> {isNurture ? 'AI Check-in Prompt (tone & rules)' : 'AI Reply Prompt'}
@@ -336,6 +407,71 @@ function AddLeadsModal({ campaignId, onClose, onAdded }) {
   )
 }
 
+// ── Rich Text Editor ──────────────────────────────────────────────────────────
+
+function RteButton({ onClick, title, children }) {
+  return (
+    <button
+      type="button"
+      onMouseDown={e => { e.preventDefault(); onClick() }}
+      title={title}
+      className="p-1.5 rounded text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+    >
+      {children}
+    </button>
+  )
+}
+
+function RichTextEditor({ value, onChange, placeholder, chips = [] }) {
+  const ref = useRef(null)
+
+  // Seed the editor once; afterwards it's edited in place (avoids cursor jumps).
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== (value || '')) ref.current.innerHTML = value || ''
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const emit = () => onChange(ref.current ? ref.current.innerHTML : '')
+  const exec = (cmd, arg) => { ref.current?.focus(); document.execCommand(cmd, false, arg); emit() }
+  const insertText = (t) => { ref.current?.focus(); document.execCommand('insertText', false, t); emit() }
+  const addLink = () => { const url = window.prompt('Link URL:', 'https://'); if (url) exec('createLink', url) }
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-600 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+      <div className="flex items-center gap-0.5 px-1.5 py-1 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex-wrap">
+        <RteButton onClick={() => exec('bold')} title="Bold"><Bold size={14} /></RteButton>
+        <RteButton onClick={() => exec('italic')} title="Italic"><Italic size={14} /></RteButton>
+        <RteButton onClick={() => exec('underline')} title="Underline"><Underline size={14} /></RteButton>
+        <span className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5" />
+        <RteButton onClick={() => exec('insertUnorderedList')} title="Bullet list"><List size={14} /></RteButton>
+        <RteButton onClick={() => exec('insertOrderedList')} title="Numbered list"><ListOrdered size={14} /></RteButton>
+        <RteButton onClick={addLink} title="Insert link"><Link2 size={14} /></RteButton>
+        <RteButton onClick={() => exec('removeFormat')} title="Clear formatting"><Eraser size={14} /></RteButton>
+        {chips.length > 0 && <span className="w-px h-4 bg-slate-200 dark:bg-slate-600 mx-0.5" />}
+        {chips.map(c => (
+          <button
+            key={c}
+            type="button"
+            onMouseDown={e => { e.preventDefault(); insertText(c) }}
+            title={`Insert ${c}`}
+            className="px-1.5 py-0.5 rounded text-xs font-mono text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={emit}
+        data-placeholder={placeholder}
+        className="rte-area min-h-[9rem] max-h-72 overflow-y-auto px-3 py-2 text-sm leading-relaxed text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 focus:outline-none"
+      />
+    </div>
+  )
+}
+
 // ── Step Editor Row ───────────────────────────────────────────────────────────
 
 function StepRow({ step, index, onSave, onDelete }) {
@@ -384,17 +520,13 @@ function StepRow({ step, index, onSave, onDelete }) {
         placeholder="Subject line"
         className={inputCls}
       />
-      <textarea
+      <RichTextEditor
         value={form.body}
-        onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-        rows={5}
-        placeholder="Hi {{name}}, ... about {{service}} ..."
-        className={`${inputCls} resize-none`}
+        onChange={html => setForm(f => ({ ...f, body: html }))}
+        placeholder="Write the email… format with the toolbar, and use the chips to drop in lead details."
+        chips={['{{name}}', '{{email}}', '{{service}}']}
       />
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">
-          Placeholders: <code className="text-slate-500 dark:text-slate-300">{'{{name}}'}</code> <code className="text-slate-500 dark:text-slate-300">{'{{email}}'}</code> <code className="text-slate-500 dark:text-slate-300">{'{{service}}'}</code>
-        </span>
+      <div className="flex items-center justify-end">
         <button
           onClick={save}
           disabled={!dirty || saving}
@@ -417,6 +549,12 @@ function NurtureDetail({ campaign, onUpdated }) {
   const [prompt, setPrompt] = useState(campaign.ai_reply_prompt || '')
   const [interval, setIntervalDays] = useState(campaign.interval_days ?? 30)
   const [unit, setUnit] = useState(campaign.interval_unit || 'days')
+  const [sched, setSched] = useState({
+    daily_limit: campaign.daily_limit ?? 50,
+    send_days: campaign.send_days ?? '1,2,3,4,5,6,7',
+    send_start_hour: campaign.send_start_hour ?? 0,
+    send_end_hour: campaign.send_end_hour ?? 24,
+  })
   const [savingSettings, setSavingSettings] = useState(false)
 
   useEffect(() => {
@@ -424,18 +562,38 @@ function NurtureDetail({ campaign, onUpdated }) {
     setPrompt(campaign.ai_reply_prompt || '')
     setIntervalDays(campaign.interval_days ?? 30)
     setUnit(campaign.interval_unit || 'days')
+    setSched({
+      daily_limit: campaign.daily_limit ?? 50,
+      send_days: campaign.send_days ?? '1,2,3,4,5,6,7',
+      send_start_hour: campaign.send_start_hour ?? 0,
+      send_end_hour: campaign.send_end_hour ?? 24,
+    })
     getNurtureClients(campaign.id)
       .then(setClients)
       .catch(e => notify('Failed to load clients: ' + e.message, 'error'))
       .finally(() => setLoading(false))
   }, [campaign.id])
 
-  const settingsDirty = prompt !== (campaign.ai_reply_prompt || '') || Number(interval) !== (campaign.interval_days ?? 30) || unit !== (campaign.interval_unit || 'days')
+  const settingsDirty = prompt !== (campaign.ai_reply_prompt || '')
+    || Number(interval) !== (campaign.interval_days ?? 30)
+    || unit !== (campaign.interval_unit || 'days')
+    || Number(sched.daily_limit) !== (campaign.daily_limit ?? 50)
+    || sched.send_days !== (campaign.send_days ?? '1,2,3,4,5,6,7')
+    || Number(sched.send_start_hour) !== (campaign.send_start_hour ?? 0)
+    || Number(sched.send_end_hour) !== (campaign.send_end_hour ?? 24)
 
   async function saveSettings() {
     setSavingSettings(true)
     try {
-      onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_prompt: prompt, interval_days: Number(interval) || 30, interval_unit: unit }))
+      onUpdated(await updateEmailCampaign(campaign.id, {
+        ai_reply_prompt: prompt,
+        interval_days: Number(interval) || 30,
+        interval_unit: unit,
+        daily_limit: Number(sched.daily_limit) || 50,
+        send_days: sched.send_days,
+        send_start_hour: Number(sched.send_start_hour) || 0,
+        send_end_hour: Number(sched.send_end_hour) || 24,
+      }))
     } catch (e) { notify('Failed to save: ' + e.message, 'error') } finally { setSavingSettings(false) }
   }
 
@@ -528,6 +686,20 @@ function NurtureDetail({ campaign, onUpdated }) {
           <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">AI Check-in Prompt</label>
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={4} className={`${inputCls} resize-none`} />
         </div>
+        <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Sending Schedule</div>
+          <SendScheduleControls
+            daily={sched.daily_limit}
+            days={sched.send_days}
+            startH={sched.send_start_hour}
+            endH={sched.send_end_hour}
+            onDaily={v => setSched(s => ({ ...s, daily_limit: v }))}
+            onDays={v => setSched(s => ({ ...s, send_days: v }))}
+            onStart={v => setSched(s => ({ ...s, send_start_hour: v }))}
+            onEnd={v => setSched(s => ({ ...s, send_end_hour: v }))}
+          />
+          <p className="text-xs text-slate-400 mt-2">Check-ins only send on these days, within this window, and never more than the daily limit.</p>
+        </div>
       </div>
 
       {/* Clients */}
@@ -581,9 +753,38 @@ function CampaignDetail({ campaign, onUpdated }) {
   const [loading, setLoading] = useState(true)
   const [addingLeads, setAddingLeads] = useState(false)
   const [confirmLead, setConfirmLead] = useState(null)
+  const [sched, setSched] = useState({
+    daily_limit: campaign.daily_limit ?? 50,
+    send_days: campaign.send_days ?? '1,2,3,4,5,6,7',
+    send_start_hour: campaign.send_start_hour ?? 0,
+    send_end_hour: campaign.send_end_hour ?? 24,
+  })
+  const [savingSched, setSavingSched] = useState(false)
+  const schedDirty = Number(sched.daily_limit) !== (campaign.daily_limit ?? 50)
+    || sched.send_days !== (campaign.send_days ?? '1,2,3,4,5,6,7')
+    || Number(sched.send_start_hour) !== (campaign.send_start_hour ?? 0)
+    || Number(sched.send_end_hour) !== (campaign.send_end_hour ?? 24)
+
+  async function saveSchedule() {
+    setSavingSched(true)
+    try {
+      onUpdated(await updateEmailCampaign(campaign.id, {
+        daily_limit: Number(sched.daily_limit) || 50,
+        send_days: sched.send_days,
+        send_start_hour: Number(sched.send_start_hour) || 0,
+        send_end_hour: Number(sched.send_end_hour) || 24,
+      }))
+    } catch (e) { notify('Failed to save schedule: ' + e.message, 'error') } finally { setSavingSched(false) }
+  }
 
   useEffect(() => {
     setLoading(true)
+    setSched({
+      daily_limit: campaign.daily_limit ?? 50,
+      send_days: campaign.send_days ?? '1,2,3,4,5,6,7',
+      send_start_hour: campaign.send_start_hour ?? 0,
+      send_end_hour: campaign.send_end_hour ?? 24,
+    })
     Promise.all([getEmailSteps(campaign.id), getEmailLeads(campaign.id)])
       .then(([s, l]) => { setSteps(s); setLeads(l) })
       .catch(e => notify('Failed to load: ' + e.message, 'error'))
@@ -691,6 +892,27 @@ function CampaignDetail({ campaign, onUpdated }) {
           <div className="text-2xl font-bold text-slate-500 dark:text-slate-300">{completed}</div>
           <div className="text-xs text-slate-400 mt-0.5">Completed</div>
         </div>
+      </div>
+
+      {/* Sending Schedule */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Clock size={15} className="text-blue-500" /> Sending Schedule</h3>
+          <button onClick={saveSchedule} disabled={!schedDirty || savingSched} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors">
+            {savingSched ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
+          </button>
+        </div>
+        <SendScheduleControls
+          daily={sched.daily_limit}
+          days={sched.send_days}
+          startH={sched.send_start_hour}
+          endH={sched.send_end_hour}
+          onDaily={v => setSched(s => ({ ...s, daily_limit: v }))}
+          onDays={v => setSched(s => ({ ...s, send_days: v }))}
+          onStart={v => setSched(s => ({ ...s, send_start_hour: v }))}
+          onEnd={v => setSched(s => ({ ...s, send_end_hour: v }))}
+        />
+        <p className="text-xs text-slate-400">Outreach emails only send on these days, within this window, and never more than the daily limit.</p>
       </div>
 
       {loading ? (

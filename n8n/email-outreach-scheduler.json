@@ -127,6 +127,42 @@
         "queryParameters": {
           "parameters": [
             {
+              "name": "last_sent_at",
+              "value": "=gte.{{ $now.startOf('day').toISO() }}"
+            },
+            {
+              "name": "select",
+              "value": "campaign_id,last_sent_at"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0015-4a15-9015-000000000015",
+      "name": "Get Sent Today",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ -2096, 1040 ],
+      "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } }
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_leads",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
               "name": "status",
               "value": "eq.Active"
             },
@@ -190,8 +226,7 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const lead = $json;\nconst steps = $('Get All Steps').all().map(i => i.json);\nconst campaigns = $('Get Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === lead.campaign_id);\nconst now = new Date();\nconst base = { ...lead, lead_id: lead.id, nowISO: now.toISOString(), shouldSend: false, markComplete: false };\n// Campaign is paused or not found -> do nothing (no send, no complete).\nif (!campaign) { return base; }\nconst curr = lead.current_step == null ? 0 : Number(lead.current_step);\nconst step = steps.find(s => s.campaign_id === lead.campaign_id && Number(s.step_number) === curr);\n// No step at this index -> the sequence is finished.\nif (!step) { return { ...base, markComplete: true }; }\n// Step exists but has no content yet -> skip without advancing (will retry next tick once filled).\nconst hasContent = String(step.subject || '').trim() !== '' || String(step.body || '').trim() !== '';\nif (!hasContent) { return base; }\nconst fill = (t) => (t || '')\n  .split('{{name}}').join(lead.name || 'there')\n  .split('{{email}}').join(lead.email || '')\n  .split('{{service}}').join(lead.service || '');\nconst next = steps.find(s => s.campaign_id === lead.campaign_id && Number(s.step_number) === curr + 1);\nlet nextSendAt, newStatus;\nif (next) {\n  nextSendAt = new Date(now.getTime() + (Number(next.delay_days) || 0) * 86400000).toISOString();\n  newStatus = 'Active';\n} else {\n  nextSendAt = now.toISOString();\n  newStatus = 'Completed';\n}\nreturn {\n  ...lead,\n  shouldSend: true,\n  markComplete: false,\n  lead_id: lead.id,\n  to: lead.email,\n  toName: lead.name,\n  fromName: campaign.from_name || '',\n  subject: fill(step.subject),\n  body: fill(step.body),\n  step_number: curr,\n  nextStep: curr + 1,\n  nextSendAt,\n  newStatus,\n  emailsSent: (Number(lead.emails_sent) || 0) + 1,\n  nowISO: now.toISOString()\n};"
+        "jsCode": "const steps = $('Get All Steps').all().map(i => i.json);\nconst campaigns = $('Get Campaigns').all().map(i => i.json);\nconst sentToday = $('Get Sent Today').all().map(i => i.json);\nconst now = new Date();\nconst weekday = $now.weekday; // Luxon: 1=Mon .. 7=Sun (workflow timezone)\nconst hour = $now.hour;\n// Remaining daily capacity per campaign (limit minus already-sent-today).\nconst capacity = {};\nfor (const c of campaigns) {\n  const used = sentToday.filter(s => s.campaign_id === c.id).length;\n  const limit = c.daily_limit == null ? 999999 : Number(c.daily_limit);\n  capacity[c.id] = Math.max(0, limit - used);\n}\nconst dayAllowed = (c) => String(c.send_days == null ? '1,2,3,4,5,6,7' : c.send_days).split(',').map(x => parseInt(x.trim(), 10)).includes(weekday);\nconst windowOpen = (c) => {\n  const s = c.send_start_hour == null ? 0 : Number(c.send_start_hour);\n  const e = c.send_end_hour == null ? 24 : Number(c.send_end_hour);\n  return hour >= s && hour < e;\n};\nconst fill = (t, lead) => (t || '').split('{{name}}').join(lead.name || 'there').split('{{email}}').join(lead.email || '').split('{{service}}').join(lead.service || '');\nconst items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const lead = items[i].json;\n  const pair = { item: i };\n  const campaign = campaigns.find(c => c.id === lead.campaign_id);\n  const base = { ...lead, lead_id: lead.id, nowISO: now.toISOString(), shouldSend: false, markComplete: false };\n  if (!campaign) { out.push({ json: base, pairedItem: pair }); continue; }\n  const curr = lead.current_step == null ? 0 : Number(lead.current_step);\n  const step = steps.find(s => s.campaign_id === lead.campaign_id && Number(s.step_number) === curr);\n  if (!step) { out.push({ json: { ...base, markComplete: true }, pairedItem: pair }); continue; }\n  const hasContent = String(step.subject || '').trim() !== '' || String(step.body || '').trim() !== '';\n  if (!hasContent) { out.push({ json: base, pairedItem: pair }); continue; }\n  // Schedule gating: only send on allowed days, within the window, and under the daily cap.\n  if (!dayAllowed(campaign) || !windowOpen(campaign)) { out.push({ json: base, pairedItem: pair }); continue; }\n  if ((capacity[campaign.id] || 0) <= 0) { out.push({ json: base, pairedItem: pair }); continue; }\n  capacity[campaign.id] -= 1;\n  const next = steps.find(s => s.campaign_id === lead.campaign_id && Number(s.step_number) === curr + 1);\n  let nextSendAt, newStatus;\n  if (next) { nextSendAt = new Date(now.getTime() + (Number(next.delay_days) || 0) * 86400000).toISOString(); newStatus = 'Active'; }\n  else { nextSendAt = now.toISOString(); newStatus = 'Completed'; }\n  out.push({ json: {\n    ...lead, shouldSend: true, markComplete: false, lead_id: lead.id,\n    to: lead.email, toName: lead.name, fromName: campaign.from_name || '',\n    subject: fill(step.subject, lead), body: fill(step.body, lead),\n    step_number: curr, nextStep: curr + 1, nextSendAt, newStatus,\n    emailsSent: (Number(lead.emails_sent) || 0) + 1, nowISO: now.toISOString()\n  }, pairedItem: pair });\n}\nreturn out;"
       },
       "id": "a1b2c3d4-0006-4a06-9006-000000000006",
       "name": "Resolve & Personalize",
@@ -226,8 +261,8 @@
       "parameters": {
         "sendTo": "={{ $json.to }}",
         "subject": "={{ $json.subject }}",
-        "emailType": "text",
-        "message": "={{ $json.body + '\\n\\nTake care,\\nManam Parvez\\nAniya Networks Solutions Inc.' }}",
+        "emailType": "html",
+        "message": "={{ $json.body + '<br><br>Take care,<br>Manam Parvez<br>Aniya Networks Solutions Inc.' }}",
         "options": {
           "appendAttribution": false
         }
@@ -554,6 +589,17 @@
       ]
     },
     "Get Campaigns": {
+      "main": [
+        [
+          {
+            "node": "Get Sent Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sent Today": {
       "main": [
         [
           {
