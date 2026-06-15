@@ -153,6 +153,17 @@ export async function getChatMessages(sessionId) {
   return data
 }
 
+export async function getChatMessagesByPhone(phone) {
+  if (isDemo()) return []
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('phone', phone)
+    .order('timestamp', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
 export async function deleteChatSession(sessionId) {
   blockIfDemo()
   const { error } = await supabase
@@ -468,6 +479,125 @@ export async function getAllNurtureClients() {
     .from('nurture_clients')
     .select('*')
     .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+// ─── REVIEW CAMPAIGNS ────────────────────────────────────────────────────────
+
+export async function getReviewCampaigns() {
+  if (isDemo()) return []
+  const { data, error } = await supabase
+    .from('review_campaigns')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createReviewCampaign(campaign) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('review_campaigns')
+    .insert(campaign)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateReviewCampaign(id, updates) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('review_campaigns')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteReviewCampaign(id) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('review_campaigns')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function getReviewLeads(campaignId) {
+  if (isDemo()) return []
+  const { data, error } = await supabase
+    .from('review_leads')
+    .select('*')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function createReviewLeads(leads) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('review_leads')
+    .insert(leads)
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function updateReviewLead(id, updates) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('review_leads')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteReviewLead(id) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('review_leads')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+// Public — preview mode: fetch campaign settings by ID (no lead needed)
+export async function getReviewCampaignPreview(id) {
+  const { data, error } = await supabase
+    .from('review_campaigns')
+    .select('form_logo_url, form_title, form_subtitle, review_link')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+// Public — called by the review form page (no auth needed, anon key)
+export async function getReviewFormData(token) {
+  const { data, error } = await supabase
+    .from('review_leads')
+    .select('*, review_campaigns(*)')
+    .eq('token', token)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function submitReviewByToken(token, updates) {
+  const { data, error } = await supabase
+    .from('review_leads')
+    .update(updates)
+    .eq('token', token)
+    .select()
+    .single()
   if (error) throw error
   return data
 }

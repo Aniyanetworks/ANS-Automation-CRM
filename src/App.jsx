@@ -13,6 +13,8 @@ import Pipelines from './pages/Pipelines'
 import Automations from './pages/Automations'
 import EmailCampaigns from './pages/EmailCampaigns'
 import EmailReport from './pages/EmailReport'
+import ReviewCampaigns from './pages/ReviewCampaigns'
+import ReviewForm from './pages/ReviewForm'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -35,6 +37,8 @@ export default function App() {
     <Routes>
       <Route path="/login"  element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+      <Route path="/r/:token" element={<ReviewForm />} />
+      <Route path="/r" element={<ReviewForm />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard"   element={<Dashboard />} />
@@ -46,6 +50,7 @@ export default function App() {
         <Route path="automations" element={<Automations />} />
         <Route path="email-campaigns" element={<EmailCampaigns />} />
         <Route path="email-report" element={<EmailReport />} />
+        <Route path="review-campaigns" element={<ReviewCampaigns />} />
       </Route>
     </Routes>
   )
