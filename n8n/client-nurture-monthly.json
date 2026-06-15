@@ -83,6 +83,42 @@
         "queryParameters": {
           "parameters": [
             {
+              "name": "last_sent_at",
+              "value": "=gte.{{ $now.startOf('day').toISO() }}"
+            },
+            {
+              "name": "select",
+              "value": "campaign_id,last_sent_at"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1f2a3b4-0012-4e12-9e12-000000000012",
+      "name": "Get Sent Today",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ -2096, 1040 ],
+      "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } }
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_clients",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
               "name": "status",
               "value": "eq.Active"
             },
@@ -142,8 +178,7 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const client = $json;\nconst campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst campaign = campaigns.find(c => c.id === client.campaign_id);\nconst now = new Date();\n// Campaign paused/missing -> skip (do not send, do not reschedule).\nif (!campaign) { return { ...client, shouldSend: false, client_id: client.id, nowISO: now.toISOString() }; }\nconst interval = Number(campaign.interval_days) || 30;\nconst unitMs = { minutes: 60000, hours: 3600000, days: 86400000 };\nconst nextSendAt = new Date(now.getTime() + interval * (unitMs[campaign.interval_unit] || 86400000)).toISOString();\nconst firstName = (client.name || 'there').split(' ')[0];\nconst sent = Number(client.emails_sent) || 0;\nconst subjects = ['Hi ' + firstName + ', just checking in', 'Thinking of you, ' + firstName, firstName + ', how have you been?', 'A quick hello, ' + firstName, 'Just wanted to say hi, ' + firstName];\nreturn {\n  ...client,\n  shouldSend: true,\n  client_id: client.id,\n  email: client.email,\n  name: client.name || '',\n  firstName,\n  note: client.note || '',\n  tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n  fromName: campaign.from_name || '',\n  subject: subjects[sent % subjects.length],\n  lastMessage: client.last_message || '',\n  checkInNumber: sent + 1,\n  nextSendAt,\n  emailsSent: sent + 1,\n  nowISO: now.toISOString()\n};"
+        "jsCode": "const campaigns = $('Get Nurture Campaigns').all().map(i => i.json);\nconst sentToday = $('Get Sent Today').all().map(i => i.json);\nconst now = new Date();\nconst weekday = $now.weekday; // Luxon 1=Mon..7=Sun (workflow timezone)\nconst hour = $now.hour;\nconst capacity = {};\nfor (const c of campaigns) {\n  const used = sentToday.filter(s => s.campaign_id === c.id).length;\n  const limit = c.daily_limit == null ? 999999 : Number(c.daily_limit);\n  capacity[c.id] = Math.max(0, limit - used);\n}\nconst dayAllowed = (c) => String(c.send_days == null ? '1,2,3,4,5,6,7' : c.send_days).split(',').map(x => parseInt(x.trim(), 10)).includes(weekday);\nconst windowOpen = (c) => { const s = c.send_start_hour == null ? 0 : Number(c.send_start_hour); const e = c.send_end_hour == null ? 24 : Number(c.send_end_hour); return hour >= s && hour < e; };\nconst unitMs = { minutes: 60000, hours: 3600000, days: 86400000 };\nconst items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const client = items[i].json;\n  const pair = { item: i };\n  const campaign = campaigns.find(c => c.id === client.campaign_id);\n  const base = { ...client, client_id: client.id, nowISO: now.toISOString(), shouldSend: false };\n  if (!campaign) { out.push({ json: base, pairedItem: pair }); continue; }\n  if (!dayAllowed(campaign) || !windowOpen(campaign)) { out.push({ json: base, pairedItem: pair }); continue; }\n  if ((capacity[campaign.id] || 0) <= 0) { out.push({ json: base, pairedItem: pair }); continue; }\n  capacity[campaign.id] -= 1;\n  const interval = Number(campaign.interval_days) || 30;\n  const nextSendAt = new Date(now.getTime() + interval * (unitMs[campaign.interval_unit] || 86400000)).toISOString();\n  const firstName = (client.name || 'there').split(' ')[0];\n  const sent = Number(client.emails_sent) || 0;\n  const subjects = ['Hi ' + firstName + ', just checking in', 'Thinking of you, ' + firstName, firstName + ', how have you been?', 'A quick hello, ' + firstName, 'Just wanted to say hi, ' + firstName];\n  out.push({ json: {\n    ...client, shouldSend: true, client_id: client.id, email: client.email, name: client.name || '', firstName,\n    note: client.note || '', tone: campaign.ai_reply_prompt || 'Write a warm, friendly relationship check-in to a past client. Not a sales pitch.',\n    fromName: campaign.from_name || '', subject: subjects[sent % subjects.length],\n    lastMessage: client.last_message || '', checkInNumber: sent + 1, nextSendAt, emailsSent: sent + 1, nowISO: now.toISOString()\n  }, pairedItem: pair });\n}\nreturn out;"
       },
       "id": "e1f2a3b4-0005-4e05-9e05-000000000005",
       "name": "Prepare",
@@ -394,6 +429,17 @@
       ]
     },
     "Get Nurture Campaigns": {
+      "main": [
+        [
+          {
+            "node": "Get Sent Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Sent Today": {
       "main": [
         [
           {
