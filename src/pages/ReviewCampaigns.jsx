@@ -310,6 +310,176 @@ function CopyButton({ text, title = 'Copy' }) {
   )
 }
 
+// ── Lead History Modal ────────────────────────────────────────────────────────
+
+function LeadHistoryModal({ lead, campaign, followupDays, followupMessages, onClose }) {
+  const scheduleDays = [0, ...(followupDays.length ? followupDays : DEFAULT_FOLLOWUP_DAYS)]
+  const sentCount = Number(lead.messages_sent) || 0
+  const currentStep = Number(lead.current_step) || 0
+  const enrolled = new Date(lead.created_at)
+
+  const reviewLink = `${window.location.origin}/r/${lead.token}`
+  const name = lead.name || 'there'
+  const fromName = campaign.from_name || 'Aniya Network Solutions'
+  const fromEmail = campaign.from_email || ''
+  function fill(t) {
+    return (t || '')
+      .split('{{name}}').join(name)
+      .split('{{review_link}}').join(reviewLink)
+      .split('{{from_name}}').join(fromName)
+      .split('{{from_email}}').join(fromEmail)
+  }
+
+  function stepDate(stepIndex) {
+    const offsetDays = scheduleDays[stepIndex] || 0
+    const d = new Date(enrolled.getTime() + offsetDays * 86400000)
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  function stepLabel(i) {
+    if (i === 0) return 'Initial Send · Day 0'
+    return `${STEP_LABELS[i - 1] || `Step ${i}`} Follow-up · Day ${scheduleDays[i]}`
+  }
+
+  const totalSteps = scheduleDays.length
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-slate-900 dark:text-white text-base">
+                {lead.name || lead.phone || lead.email}
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColors[lead.status] || ''}`}>
+                {lead.status}
+              </span>
+              {lead.review_rating && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ratingColors[lead.review_rating] || ''}`}>
+                  {lead.review_rating}
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {lead.phone}{lead.phone && lead.email ? ' · ' : ''}{lead.email}
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 flex-shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+
+          {/* Review result */}
+          {lead.submitted_at && (
+            <div className={`rounded-xl p-3 border ${lead.review_rating === 'Bad'
+              ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+              : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+            }`}>
+              <div className="text-xs font-semibold mb-1 flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
+                <Star size={12} className="text-amber-500" /> Review Submitted
+                <span className="ml-auto font-normal text-slate-400">
+                  {new Date(lead.submitted_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </span>
+              </div>
+              {lead.review_comment && (
+                <p className="text-xs text-slate-600 dark:text-slate-300 italic">"{lead.review_comment}"</p>
+              )}
+            </div>
+          )}
+
+          {/* Timeline */}
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-0.5">
+            Follow-up History
+          </div>
+
+          <div className="space-y-2">
+            {Array.from({ length: totalSteps }, (_, i) => {
+              const sent = i < sentCount
+              const isNext = i === currentStep && lead.status === 'Active'
+              const pending = !sent && !isNext
+
+              const msg = followupMessages[i] || {}
+              const smsText = fill(msg.sms || campaign.sms_body || '')
+              const subject = fill(msg.subject || campaign.email_subject || '')
+              const emailBody = fill(msg.body || campaign.email_body || '')
+
+              let dateLabel = ''
+              if (sent) dateLabel = `Sent ${stepDate(i)}`
+              else if (isNext && lead.next_send_at) {
+                dateLabel = `Scheduled ${new Date(lead.next_send_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
+              } else if (pending) {
+                dateLabel = `Est. ${stepDate(i)}`
+              }
+
+              return (
+                <div key={i} className={`rounded-xl border p-3 ${
+                  sent
+                    ? 'bg-slate-50 dark:bg-slate-700/40 border-slate-200 dark:border-slate-600'
+                    : isNext
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700'
+                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 opacity-60'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[10px] font-bold ${
+                      sent ? 'bg-emerald-500' : isNext ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
+                    }`}>
+                      {sent ? '✓' : isNext ? '⏳' : i + 1}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex-1">{stepLabel(i)}</span>
+                    <span className={`text-[10px] font-medium ${sent ? 'text-emerald-600 dark:text-emerald-400' : isNext ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                      {dateLabel}
+                    </span>
+                  </div>
+                  {smsText && (
+                    <div className="ml-7 space-y-2">
+                      <div>
+                        <div className="flex items-center gap-1 text-[10px] font-semibold text-teal-600 dark:text-teal-400 mb-0.5 uppercase tracking-wide">
+                          <Phone size={9} /> SMS
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{smsText}</p>
+                      </div>
+                      {subject && (
+                        <div>
+                          <div className="flex items-center gap-1 text-[10px] font-semibold text-violet-600 dark:text-violet-400 mb-0.5 uppercase tracking-wide">
+                            <Mail size={9} /> Email
+                          </div>
+                          <p className="text-xs font-medium text-slate-700 dark:text-slate-200">{subject}</p>
+                          {emailBody && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-pre-wrap leading-relaxed">{emailBody}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {lead.status === 'Completed' && (
+              <div className="text-center text-xs text-slate-400 py-2">
+                All {sentCount} follow-up{sentCount !== 1 ? 's' : ''} completed
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700">
+          <div className="text-xs text-slate-400">
+            Enrolled {enrolled.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })} ·
+            {sentCount} of {totalSteps} messages sent
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function buildMessages(camp, days) {
   const db = Array.isArray(camp.followup_messages) ? camp.followup_messages : []
   const d = Array.isArray(days) ? days : (Array.isArray(camp.followup_days) ? camp.followup_days : DEFAULT_FOLLOWUP_DAYS)
@@ -328,6 +498,7 @@ function CampaignDetail({ campaign, onUpdated }) {
   const [loading, setLoading] = useState(true)
   const [addingLeads, setAddingLeads] = useState(false)
   const [confirmLead, setConfirmLead] = useState(null)
+  const [selectedLead, setSelectedLead] = useState(null)
 
   // Per-step messages state
   const [followupMessages, setFollowupMessages] = useState(() => buildMessages(campaign, null))
@@ -772,7 +943,7 @@ function CampaignDetail({ campaign, onUpdated }) {
                 ) : (
                   <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-[32rem] overflow-y-auto">
                     {leads.map(l => (
-                      <div key={l.id} className="px-4 py-3 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
+                      <div key={l.id} onClick={() => setSelectedLead(l)} className="px-4 py-3 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group cursor-pointer">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{l.name || l.phone || l.email}</span>
@@ -797,13 +968,15 @@ function CampaignDetail({ campaign, onUpdated }) {
                           <div className="text-xs text-slate-400">{l.messages_sent || 0} sent</div>
                         </div>
                         {l.token && (
-                          <CopyButton
-                            text={`${window.location.origin}/r/${l.token}`}
-                            title="Copy review form link"
-                          />
+                          <div onClick={e => e.stopPropagation()}>
+                            <CopyButton
+                              text={`${window.location.origin}/r/${l.token}`}
+                              title="Copy review form link"
+                            />
+                          </div>
                         )}
                         <button
-                          onClick={() => setConfirmLead(l)}
+                          onClick={e => { e.stopPropagation(); setConfirmLead(l) }}
                           className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <Trash2 size={13} />
@@ -823,6 +996,16 @@ function CampaignDetail({ campaign, onUpdated }) {
           campaignId={campaign.id}
           onClose={() => setAddingLeads(false)}
           onAdded={created => setLeads(prev => [...created, ...prev])}
+        />
+      )}
+
+      {selectedLead && (
+        <LeadHistoryModal
+          lead={selectedLead}
+          campaign={campaign}
+          followupDays={followupDays}
+          followupMessages={followupMessages}
+          onClose={() => setSelectedLead(null)}
         />
       )}
     </div>
