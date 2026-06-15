@@ -514,6 +514,7 @@ function ReviewEnrollModal({ contacts, onClose, onDone }) {
         messages_sent: 0,
       }))
       await createReviewLeads(rows)
+      fetch('https://n8n.srv1300653.hstgr.cloud/webhook/ang-ghl-review', { method: 'POST' }).catch(() => {})
       onDone(withContact.length)
       onClose()
     } catch (e) {

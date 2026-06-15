@@ -4,15 +4,21 @@
       "parameters": {
         "rule": {
           "interval": [
-            { "field": "minutes", "minutesInterval": 15 }
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
           ]
         }
       },
-      "id": "4ac0f190-17d0-4176-ac14-ee90005c5101",
+      "id": "1698b73b-0bd1-4bd1-b754-e55972b5a391",
       "name": "Check Every 15 Min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [-1808, 80]
+      "position": [
+        -5360,
+        448
+      ]
     },
     {
       "parameters": {
@@ -22,27 +28,45 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "status", "value": "eq.Active" },
-            { "name": "select", "value": "*" }
+            {
+              "name": "status",
+              "value": "eq.Active"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "options": {}
       },
-      "id": "b3b495e8-f052-4313-851f-d134ac7afdb5",
+      "id": "aba48c51-0a24-47d8-9294-9a28476304d6",
       "name": "Get Active Campaigns",
       "executeOnce": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-1584, 80],
+      "position": [
+        -5136,
+        448
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       }
     },
     {
@@ -53,65 +77,101 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "status", "value": "eq.Active" },
-            { "name": "next_send_at", "value": "=lte.{{ $now.toISO() }}" },
-            { "name": "submitted_at", "value": "is.null" },
-            { "name": "select", "value": "*" }
+            {
+              "name": "status",
+              "value": "eq.Active"
+            },
+            {
+              "name": "next_send_at",
+              "value": "=lte.{{ $now.toISO() }}"
+            },
+            {
+              "name": "submitted_at",
+              "value": "is.null"
+            },
+            {
+              "name": "select",
+              "value": "*"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "options": {}
       },
-      "id": "769e0321-a56c-4fa6-9023-c4d9a479fc8c",
+      "id": "dd7fbb28-6546-4430-9bc2-dbce5ed9e7ab",
       "name": "Get Due Leads",
       "executeOnce": true,
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-1360, 80],
+      "position": [
+        -4912,
+        448
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       }
     },
     {
       "parameters": {
         "jsCode": "// Normalise - n8n may wrap array in one item or split per row\nconst out = [];\nfor (const it of $input.all()) {\n  const v = it.json;\n  if (Array.isArray(v)) { for (const c of v) out.push({ json: c }); }\n  else if (v && v.id) { out.push({ json: v }); }\n}\nreturn out;"
       },
-      "id": "4867759d-4892-415f-ae99-080aa80daa37",
+      "id": "7b70f526-7dfb-4e7b-9ab1-83fe3b91ec74",
       "name": "Split Leads",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1136, 80]
+      "position": [
+        -4688,
+        448
+      ]
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const APP_URL = 'https://YOUR_APP_URL'; // <- replace with your deployed app URL\n\nconst lead = $json;\nconst campaigns = $('Get Active Campaigns').all().map(i => i.json);\nconst campaign = (Array.isArray(campaigns[0]) ? campaigns[0] : campaigns)\n  .find(c => c.id === lead.campaign_id);\n\nconst base = { ...lead, lead_id: lead.id, shouldSend: false, markComplete: false };\nif (!campaign) return base;\n\nconst followupDays = Array.isArray(campaign.followup_days) && campaign.followup_days.length > 0\n  ? campaign.followup_days\n  : [1, 3, 7, 15, 30, 60];\nconst SCHEDULE_DAYS = [0, ...followupDays];\n\nconst step = Number(lead.current_step ?? 0);\nconst reviewLink = `${APP_URL}/r/${lead.token}`;\nconst name = lead.name || 'there';\nconst fromName = campaign.from_name || 'Aniya Network Solutions';\n\nconst fill = t => (t || '')\n  .split('{{name}}').join(name)\n  .split('{{review_link}}').join(reviewLink)\n  .split('{{from_name}}').join(fromName)\n  .split('{{from_email}}').join(campaign.from_email || '');\n\nconst stepMsgs = Array.isArray(campaign.followup_messages) ? campaign.followup_messages : [];\nconst stepMsg = stepMsgs[step] || {};\nconst smsBody = fill(stepMsg.sms || campaign.sms_body || '');\nconst emailSubject = fill(stepMsg.subject || campaign.email_subject || '');\nconst emailBody = fill(stepMsg.body || campaign.email_body || '');\n\nconst nextStep = step + 1;\nconst now = new Date();\nlet nextSendAt, newStatus;\n\nif (nextStep < SCHEDULE_DAYS.length) {\n  const gapDays = SCHEDULE_DAYS[nextStep] - SCHEDULE_DAYS[step];\n  const d = new Date(now.getTime() + gapDays * 86400000);\n  nextSendAt = d.toISOString();\n  newStatus = 'Active';\n} else {\n  nextSendAt = now.toISOString();\n  newStatus = 'Completed';\n}\n\nreturn {\n  ...lead,\n  lead_id: lead.id,\n  shouldSend: true,\n  smsBody,\n  emailSubject,\n  emailBody,\n  reviewLink,\n  toPhone: lead.phone,\n  toEmail: lead.email,\n  toName: name,\n  fromEmail: campaign.from_email || '',\n  step,\n  nextStep,\n  nextSendAt,\n  newStatus,\n  messagesSent: (Number(lead.messages_sent) || 0) + 1,\n  nowISO: now.toISOString(),\n};"
+        "jsCode": "const APP_URL = 'https://ansghl.netlify.app'; // <- replace with your deployed app URL\n\nconst lead = $json;\nconst campaigns = $('Get Active Campaigns').all().map(i => i.json);\nconst campaign = (Array.isArray(campaigns[0]) ? campaigns[0] : campaigns)\n  .find(c => c.id === lead.campaign_id);\n\nconst base = { ...lead, lead_id: lead.id, shouldSend: false, markComplete: false };\nif (!campaign) return base;\n\nconst followupDays = Array.isArray(campaign.followup_days) && campaign.followup_days.length > 0\n  ? campaign.followup_days\n  : [1, 3, 7, 15, 30, 60];\nconst SCHEDULE_DAYS = [0, ...followupDays];\n\nconst step = Number(lead.current_step ?? 0);\nconst reviewLink = `${APP_URL}/r/${lead.token}`;\nconst name = lead.name || 'there';\nconst fromName = campaign.from_name || 'Aniya Network Solutions';\n\nconst fill = t => (t || '')\n  .split('{{name}}').join(name)\n  .split('{{review_link}}').join(reviewLink)\n  .split('{{from_name}}').join(fromName);\n\nconst stepMsgs = Array.isArray(campaign.followup_messages) ? campaign.followup_messages : [];\nconst stepMsg = stepMsgs[step] || {};\nconst smsBody = fill(stepMsg.sms || campaign.sms_body || '');\nconst emailSubject = fill(stepMsg.subject || campaign.email_subject || '');\nconst emailBody = fill(stepMsg.body || campaign.email_body || '');\n\nconst nextStep = step + 1;\nconst now = new Date();\nlet nextSendAt, newStatus;\n\nif (nextStep < SCHEDULE_DAYS.length) {\n  const gapDays = SCHEDULE_DAYS[nextStep] - SCHEDULE_DAYS[step];\n  const d = new Date(now.getTime() + gapDays * 86400000);\n  nextSendAt = d.toISOString();\n  newStatus = 'Active';\n} else {\n  nextSendAt = now.toISOString();\n  newStatus = 'Completed';\n}\n\nreturn {\n  ...lead,\n  lead_id: lead.id,\n  shouldSend: true,\n  smsBody,\n  emailSubject,\n  emailBody,\n  reviewLink,\n  toPhone: lead.phone,\n  toEmail: lead.email,\n  toName: name,\n  fromEmail: campaign.from_email || '',\n  step,\n  nextStep,\n  nextSendAt,\n  newStatus,\n  messagesSent: (Number(lead.messages_sent) || 0) + 1,\n  nowISO: now.toISOString(),\n};"
       },
-      "id": "6369597f-ac27-411f-91fb-4687000e152e",
+      "id": "b6f83158-541e-4b1d-b4ac-136e098f8822",
       "name": "Resolve & Personalise",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-912, 80]
+      "position": [
+        -4464,
+        448
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
-            { "value1": "={{ $json.shouldSend }}", "value2": true }
+            {
+              "value1": "={{ $json.shouldSend }}",
+              "value2": true
+            }
           ]
         }
       },
-      "id": "cfdfff8e-6bda-4214-b8b2-3dbb307c3fd1",
+      "id": "e8d3717d-62e7-4d93-8c63-8a5358ce1571",
       "name": "Should Send?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [-688, 80]
+      "position": [
+        -4240,
+        448
+      ]
     },
     {
       "parameters": {
@@ -121,19 +181,31 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "options": {}
       },
-      "id": "e8b1f9c2-3a44-4d67-b5e0-2f7c8d1a9e04",
+      "id": "d516563a-c041-43f7-a3ed-e4bcc7797b2e",
       "name": "Get Contact Session",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-464, 80],
+      "position": [
+        -4016,
+        448
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -141,31 +213,42 @@
       "parameters": {
         "conditions": {
           "string": [
-            { "value1": "={{ $('Resolve & Personalise').item.json.toPhone }}", "operation": "isNotEmpty" }
+            {
+              "value1": "={{ $('Resolve & Personalise').item.json.toPhone }}",
+              "operation": "isNotEmpty"
+            }
           ]
         }
       },
-      "id": "fefa8f78-cdfd-414b-9feb-8bd25b2821ae",
+      "id": "e752a6c3-5696-4d8f-8a69-6f4039857513",
       "name": "Has Phone?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [-240, 80]
+      "position": [
+        -3792,
+        448
+      ]
     },
     {
       "parameters": {
-        "resource": "sms",
-        "to": "={{ $('Resolve & Personalise').item.json.toPhone }}",
         "from": "+13653603797",
+        "to": "={{ $('Resolve & Personalise').item.json.toPhone }}",
         "message": "={{ $('Resolve & Personalise').item.json.smsBody }}",
         "options": {}
       },
-      "id": "727df325-dcfe-45b2-ba9b-add25d363683",
+      "id": "551f41e1-00c3-4e05-84c7-b7ab6a31b667",
       "name": "Send SMS",
       "type": "n8n-nodes-base.twilio",
       "typeVersion": 1,
-      "position": [-16, -64],
+      "position": [
+        -3568,
+        304
+      ],
       "credentials": {
-        "twilioApi": { "id": "iq0iE8ReZovuE4JX", "name": "MP 12184380445 Twilio account" }
+        "twilioApi": {
+          "id": "iq0iE8ReZovuE4JX",
+          "name": "MP 12184380445 Twilio account"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -178,30 +261,60 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=minimal" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
           ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "session_id", "value": "={{ ($('Get Contact Session').item.json[0]?.session_id) || ('review-' + $('Resolve & Personalise').item.json.token) }}" },
-            { "name": "phone", "value": "={{ $('Resolve & Personalise').item.json.toPhone }}" },
-            { "name": "text", "value": "={{ $('Resolve & Personalise').item.json.smsBody }}" },
-            { "name": "role", "value": "agent" },
-            { "name": "timestamp", "value": "={{ $('Resolve & Personalise').item.json.nowISO }}" }
+            {
+              "name": "session_id",
+              "value": "={{ ($('Get Contact Session').item.json[0]?.session_id) || ('review-' + $('Resolve & Personalise').item.json.token) }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $('Resolve & Personalise').item.json.toPhone }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Resolve & Personalise').item.json.smsBody }}"
+            },
+            {
+              "name": "role",
+              "value": "agent"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $('Resolve & Personalise').item.json.nowISO }}"
+            }
           ]
         },
         "options": {}
       },
-      "id": "d7a3c812-f041-4e9b-b2a4-1fc8e5d90abc",
+      "id": "962d9363-d0c9-47d5-84d6-db860babcb9c",
       "name": "Log SMS",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [208, -64],
+      "position": [
+        -3344,
+        304
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -209,15 +322,21 @@
       "parameters": {
         "conditions": {
           "string": [
-            { "value1": "={{ $('Resolve & Personalise').item.json.toEmail }}", "operation": "isNotEmpty" }
+            {
+              "value1": "={{ $('Resolve & Personalise').item.json.toEmail }}",
+              "operation": "isNotEmpty"
+            }
           ]
         }
       },
-      "id": "220bf527-dde1-4853-bde9-ccf6993df0ae",
+      "id": "3d834500-619c-4ba7-ae72-04dd4f19c275",
       "name": "Has Email?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [432, 80]
+      "position": [
+        -3120,
+        448
+      ]
     },
     {
       "parameters": {
@@ -225,16 +344,24 @@
         "subject": "={{ $('Resolve & Personalise').item.json.emailSubject }}",
         "emailType": "text",
         "message": "={{ $('Resolve & Personalise').item.json.emailBody }}",
-        "options": { "appendAttribution": false }
+        "options": {
+          "appendAttribution": false
+        }
       },
-      "id": "e1ca699a-812d-4ea1-95a4-e914ed1bc177",
+      "id": "d99fe18a-ad1b-47ec-b5fa-397c5a5a6b99",
       "name": "Send Email",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [656, -64],
+      "position": [
+        -2896,
+        304
+      ],
       "webhookId": "4902daaa-b2d5-4ce7-ac72-634d4dbd9fd6",
       "credentials": {
-        "gmailOAuth2": { "id": "5m7tLE66Mg5tj0xf", "name": "Gmail account" }
+        "gmailOAuth2": {
+          "id": "5m7tLE66Mg5tj0xf",
+          "name": "Gmail account"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -247,30 +374,60 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=minimal" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
           ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "session_id", "value": "={{ ($('Get Contact Session').item.json[0]?.session_id) || ('review-' + $('Resolve & Personalise').item.json.token) }}" },
-            { "name": "phone", "value": "={{ $('Resolve & Personalise').item.json.toPhone || $('Resolve & Personalise').item.json.toEmail }}" },
-            { "name": "text", "value": "={{ '📧 ' + $('Resolve & Personalise').item.json.emailSubject + '\\n\\n' + $('Resolve & Personalise').item.json.emailBody }}" },
-            { "name": "role", "value": "agent" },
-            { "name": "timestamp", "value": "={{ $('Resolve & Personalise').item.json.nowISO }}" }
+            {
+              "name": "session_id",
+              "value": "={{ ($('Get Contact Session').item.json[0]?.session_id) || ('review-' + $('Resolve & Personalise').item.json.token) }}"
+            },
+            {
+              "name": "phone",
+              "value": "={{ $('Resolve & Personalise').item.json.toPhone || $('Resolve & Personalise').item.json.toEmail }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ '📧 ' + $('Resolve & Personalise').item.json.emailSubject + '\\n\\n' + $('Resolve & Personalise').item.json.emailBody }}"
+            },
+            {
+              "name": "role",
+              "value": "agent"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $('Resolve & Personalise').item.json.nowISO }}"
+            }
           ]
         },
         "options": {}
       },
-      "id": "c4f2a8e1-9b3d-4e7f-a6c2-8d5e1f3b9207",
+      "id": "f1de2068-47df-4924-833b-da61626f7adb",
       "name": "Log Email",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, -64],
+      "position": [
+        -2672,
+        304
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -283,29 +440,56 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=representation" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
           ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "current_step", "value": "={{ $('Resolve & Personalise').item.json.nextStep }}" },
-            { "name": "next_send_at", "value": "={{ $('Resolve & Personalise').item.json.nextSendAt }}" },
-            { "name": "messages_sent", "value": "={{ $('Resolve & Personalise').item.json.messagesSent }}" },
-            { "name": "status", "value": "={{ $('Resolve & Personalise').item.json.newStatus }}" }
+            {
+              "name": "current_step",
+              "value": "={{ $('Resolve & Personalise').item.json.nextStep }}"
+            },
+            {
+              "name": "next_send_at",
+              "value": "={{ $('Resolve & Personalise').item.json.nextSendAt }}"
+            },
+            {
+              "name": "messages_sent",
+              "value": "={{ $('Resolve & Personalise').item.json.messagesSent }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $('Resolve & Personalise').item.json.newStatus }}"
+            }
           ]
         },
         "options": {}
       },
-      "id": "cf895de2-c972-48c5-b2ef-817894671b6d",
+      "id": "2bf68d05-8e00-4e21-9536-16c6040a597a",
       "name": "Advance Lead",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1104, 80],
+      "position": [
+        -2448,
+        448
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -318,83 +502,262 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
-            { "name": "Content-Type", "value": "application/json" },
-            { "name": "Prefer", "value": "return=representation" }
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
           ]
         },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "workflow_name", "value": "Review Campaign — Follow-up Scheduler" },
-            { "name": "automation", "value": "review_campaign" },
-            { "name": "contact_name", "value": "={{ $('Resolve & Personalise').item.json.toName }}" },
-            { "name": "status", "value": "success" },
-            { "name": "trigger", "value": "scheduler" },
-            { "name": "notes", "value": "={{ 'REVIEW_STEP_' + $('Resolve & Personalise').item.json.step + ' SMS+Email' }}" }
+            {
+              "name": "workflow_name",
+              "value": "Review Campaign — Follow-up Scheduler"
+            },
+            {
+              "name": "automation",
+              "value": "review_campaign"
+            },
+            {
+              "name": "contact_name",
+              "value": "={{ $('Resolve & Personalise').item.json.toName }}"
+            },
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "trigger",
+              "value": "scheduler"
+            },
+            {
+              "name": "notes",
+              "value": "={{ 'REVIEW_STEP_' + $('Resolve & Personalise').item.json.step + ' SMS+Email' }}"
+            }
           ]
         },
         "options": {}
       },
-      "id": "a112237e-5263-444a-9e33-9f43e44edae0",
+      "id": "6724c550-83a4-487e-9661-253497ab7453",
       "name": "Log Execution",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1328, 80],
+      "position": [
+        -2224,
+        448
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "path": "ang-ghl-review",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -5360,
+        672
+      ],
+      "id": "f184d264-d257-4ab7-8857-337770a27820",
+      "name": "Webhook",
+      "webhookId": "e7751b0c-fa74-4448-a61a-7efadb0b6fa6"
     }
   ],
   "connections": {
     "Check Every 15 Min": {
-      "main": [[{ "node": "Get Active Campaigns", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Get Active Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Active Campaigns": {
-      "main": [[{ "node": "Get Due Leads", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Get Due Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Due Leads": {
-      "main": [[{ "node": "Split Leads", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Split Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Split Leads": {
-      "main": [[{ "node": "Resolve & Personalise", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Resolve & Personalise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Resolve & Personalise": {
-      "main": [[{ "node": "Should Send?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Should Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Should Send?": {
-      "main": [[{ "node": "Get Contact Session", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Get Contact Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Contact Session": {
-      "main": [[{ "node": "Has Phone?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Has Phone?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Has Phone?": {
       "main": [
-        [{ "node": "Send SMS", "type": "main", "index": 0 }],
-        [{ "node": "Has Email?", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Send SMS": {
-      "main": [[{ "node": "Log SMS", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log SMS": {
-      "main": [[{ "node": "Has Email?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Has Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Has Email?": {
       "main": [
-        [{ "node": "Send Email", "type": "main", "index": 0 }],
-        [{ "node": "Advance Lead", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Advance Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Send Email": {
-      "main": [[{ "node": "Log Email", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Email": {
-      "main": [[{ "node": "Advance Lead", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Advance Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Advance Lead": {
-      "main": [[{ "node": "Log Execution", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Active Campaigns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
