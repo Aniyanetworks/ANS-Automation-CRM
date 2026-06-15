@@ -197,7 +197,7 @@ function AddLeadsModal({ campaignId, onClose, onAdded }) {
         messages_sent: 0,
       }))
       const created = await createReviewLeads(rows)
-      fetch('https://n8n.srv1300653.hstgr.cloud/webhook/ang-ghl-review', { method: 'POST' }).catch(() => {})
+      fetch('https://n8n.srv1300653.hstgr.cloud/webhook/ang-ghl-review', { mode: 'no-cors' }).catch(() => {})
       onAdded(created)
       onClose()
     } catch (err) {
