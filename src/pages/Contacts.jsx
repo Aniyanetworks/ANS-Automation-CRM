@@ -851,6 +851,7 @@ function ReviewEnrollModal({ contacts, onClose, onDone }) {
         messages_sent: 0,
       }))
       await createReviewLeads(rows)
+      fetch('https://n8n.srv1300653.hstgr.cloud/webhook/ang-ghl-review', { mode: 'no-cors' }).catch(() => {})
       onDone(withContact.length)
       onClose()
     } catch (e) {
@@ -883,7 +884,7 @@ function ReviewEnrollModal({ contacts, onClose, onDone }) {
                 </select>
               </div>
               <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-600 dark:text-slate-300">
-                {withContact.length} contact{withContact.length !== 1 ? 's' : ''} will be enrolled. Initial SMS + Email sent within 15 minutes, then follow-ups at Day 1, 3, 7, 15, 30, 60.
+                {withContact.length} contact{withContact.length !== 1 ? 's' : ''} will be enrolled. Initial SMS + Email sent immediately, then follow-ups at Day 1, 3, 7, 15, 30, 60.
                 {skipped > 0 && <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">{skipped} skipped (no phone or email).</div>}
               </div>
             </>
