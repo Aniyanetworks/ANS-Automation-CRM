@@ -246,6 +246,27 @@ export const demoLeads = {
   [DEMO_NURTURE_CAMPAIGN]: [],
 }
 
+// Email conversation threads per lead (outbound sends, inbound replies, AI replies).
+export const demoEmailMessages = {
+  'd-l01': [
+    { id: 'd-m0101', lead_id: 'd-l01', direction: 'outbound', subject: 'Quick idea for Priya', body: 'Hi Priya,\n\nI came across your business and had a quick idea for your Website Redesign. We help teams automate it end-to-end.\n\nWorth a short chat?', step_number: 0, created_at: '2026-06-10T09:00:00Z' },
+  ],
+  'd-l02': [
+    { id: 'd-m0201', lead_id: 'd-l02', direction: 'outbound', subject: 'Quick idea for Tom', body: 'Hi Tom,\n\nI came across Becker Law and had a quick idea for your SEO. We help firms rank for the searches that actually bring clients.\n\nWorth a short chat?', step_number: 0, created_at: '2026-06-09T09:00:00Z' },
+    { id: 'd-m0202', lead_id: 'd-l02', direction: 'inbound', subject: 'Re: Quick idea for Tom', body: 'Hi — yes, this is timely. We just redid our site and traffic is flat. What would the first step look like, and what does it cost?', step_number: null, created_at: '2026-06-09T13:42:00Z' },
+    { id: 'd-m0203', lead_id: 'd-l02', direction: 'outbound', subject: 'Re: Quick idea for Tom', body: 'Great to hear, Tom! The first step is a quick audit of your current pages and target keywords — no cost. From there we map a 90-day plan. Want to grab 15 minutes this week? You can pick a time here: https://cal.com/aniya', step_number: null, created_at: '2026-06-09T13:43:30Z' },
+  ],
+}
+
+// Nurture conversation threads per client (check-ins, replies, AI replies).
+export const demoNurtureMessages = {
+  'd-n01': [
+    { id: 'd-nm0101', client_id: 'd-n01', direction: 'outbound', subject: 'Hi Daniel, just checking in', body: 'Hi Daniel! I was thinking about the booking automation we built together and hoped it is still saving your front desk plenty of time. How have you and the clinic been lately?', created_at: '2026-06-09T09:00:00Z' },
+    { id: 'd-nm0102', client_id: 'd-n01', direction: 'inbound', subject: 'Re: Hi Daniel, just checking in', body: 'Hey! Great to hear from you. Honestly the reminders have cut our no-shows way down — the team loves it. Things are busy in a good way. Hope you are well too!', created_at: '2026-06-09T17:20:00Z' },
+    { id: 'd-nm0103', client_id: 'd-n01', direction: 'outbound', subject: 'Re: Hi Daniel, just checking in', body: 'That is wonderful to hear, Daniel — fewer no-shows is exactly the win we were hoping for. So glad the team has embraced it. Wishing you and the clinic a great rest of the month!', created_at: '2026-06-09T17:22:00Z' },
+  ],
+}
+
 export const demoNurtureClients = {
   [DEMO_NURTURE_CAMPAIGN]: [
     { id: 'd-n01', campaign_id: DEMO_NURTURE_CAMPAIGN, contact_id: 'd-c12', name: 'Daniel Foster', email: 'daniel.foster@fosterdental.ca', note: 'Completed a booking + reminder automation project. Smooth delivery, client was delighted.', status: 'Active', next_send_at: '2026-07-09T09:00:00Z', last_sent_at: '2026-06-09T09:00:00Z', last_message: 'Hi Daniel! I was just thinking about the booking automation we built together and hoped it is still saving your front desk plenty of time. How have you and the clinic been lately?', emails_sent: 2, created_at: '2026-05-15T09:05:00Z' },

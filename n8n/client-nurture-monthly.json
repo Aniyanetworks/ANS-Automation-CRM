@@ -247,8 +247,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "REPLACE_OPENAI_CRED",
-          "name": "OpenAi account"
+          "id": "fj3WhBV98VkK9qr3",
+          "name": "Manam- OpenAi account"
         }
       }
     },
@@ -343,6 +343,39 @@
           "name": "Supabase ANS CRM"
         }
       },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "client_id", "value": "={{ $('Prepare').item.json.client_id }}" },
+            { "name": "direction", "value": "outbound" },
+            { "name": "subject", "value": "={{ $('Prepare').item.json.subject }}" },
+            { "name": "body", "value": "={{ $('Compose Check-in').item.json.output }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1f2a3b4-0013-4e13-9e13-000000000013",
+      "name": "Save Check-in",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ -384, 600 ],
+      "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } },
       "onError": "continueRegularOutput"
     },
     {
@@ -529,6 +562,17 @@
       ]
     },
     "Schedule Next": {
+      "main": [
+        [
+          {
+            "node": "Save Check-in",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Check-in": {
       "main": [
         [
           {

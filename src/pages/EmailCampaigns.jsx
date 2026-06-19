@@ -3,12 +3,14 @@ import {
   Mail, Plus, X, Loader2, Trash2, Users, Send, ChevronRight,
   Clock, CheckCircle, MessageSquareReply, Pause, Play, Sparkles, Save, Upload, Heart,
   Bold, Italic, Underline, List, ListOrdered, Link2, Eraser,
+  ArrowDownLeft, ArrowUpRight, Inbox,
 } from 'lucide-react'
 import {
   getEmailCampaigns, createEmailCampaign, updateEmailCampaign, deleteEmailCampaign,
   getEmailSteps, createEmailStep, updateEmailStep, deleteEmailStep,
   getEmailLeads, createEmailLeads, deleteEmailLead,
   getNurtureClients, updateNurtureClient, deleteNurtureClient,
+  getEmailMessages, getNurtureMessages, updateEmailLead, sendManualReply,
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
@@ -546,6 +548,7 @@ function NurtureDetail({ campaign, onUpdated }) {
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [confirmClient, setConfirmClient] = useState(null)
+  const [convoClient, setConvoClient] = useState(null)
   const [prompt, setPrompt] = useState(campaign.ai_reply_prompt || '')
   const [interval, setIntervalDays] = useState(campaign.interval_days ?? 30)
   const [unit, setUnit] = useState(campaign.interval_unit || 'days')
@@ -632,6 +635,7 @@ function NurtureDetail({ campaign, onUpdated }) {
         onConfirm={removeClient}
         onCancel={() => setConfirmClient(null)}
       />
+      {convoClient && <LeadConversationModal lead={convoClient} fetchMessages={getNurtureMessages} kind="nurture" onClose={() => setConvoClient(null)} />}
 
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -716,26 +720,178 @@ function NurtureDetail({ campaign, onUpdated }) {
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-[32rem] overflow-y-auto">
               {clients.map(c => (
-                <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
+                <div key={c.id} onClick={() => setConvoClient(c)} title="View conversation" className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer group">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name || c.email}</span>
                       <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'Active' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{c.status}</span>
                     </div>
                     <div className="text-xs text-slate-400 truncate">{c.email}</div>
+                    <div className="text-xs mt-0.5 flex items-center gap-2 flex-wrap">
+                      {c.last_sent_at && <span className="text-slate-400">Sent {fmtDateTime(c.last_sent_at)}</span>}
+                      {c.status === 'Active' && c.next_send_at && <span className="text-rose-500 dark:text-rose-400 flex items-center gap-0.5"><Clock size={10} /> Next {fmtDateTime(c.next_send_at)}</span>}
+                    </div>
                   </div>
                   <div className="text-right flex-shrink-0 hidden sm:block">
                     <div className="text-xs text-slate-500 dark:text-slate-300">{c.emails_sent || 0} sent</div>
-                    <div className="text-xs text-slate-400">next {c.next_send_at ? new Date(c.next_send_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}</div>
                   </div>
-                  <button onClick={() => toggleClient(c)} title={c.status === 'Active' ? 'Pause' : 'Resume'} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); toggleClient(c) }} title={c.status === 'Active' ? 'Pause' : 'Resume'} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                     {c.status === 'Active' ? <Pause size={13} /> : <Play size={13} />}
                   </button>
-                  <button onClick={() => setConfirmClient(c)} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100">
+                  <button onClick={(e) => { e.stopPropagation(); setConfirmClient(c) }} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100">
                     <Trash2 size={13} />
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Lead Conversation ─────────────────────────────────────────────────────────
+
+// All campaign send times are shown in EST (America/Toronto), regardless of the viewer's timezone.
+function fmtDateTime(ts) {
+  if (!ts) return '—'
+  return new Date(ts).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto', timeZoneName: 'short' })
+}
+
+function LeadConversationModal({ lead, onClose, fetchMessages = getEmailMessages, kind = 'email' }) {
+  const notify = useNotify()
+  const { isDemo } = useAuth()
+  const [messages, setMessages] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [aiOn, setAiOn] = useState(lead.ai_reply_enabled !== false)
+  const [togglingAi, setTogglingAi] = useState(false)
+  const [showComposer, setShowComposer] = useState(false)
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+  const [composerKey, setComposerKey] = useState(0)
+
+  useEffect(() => {
+    fetchMessages(lead.id)
+      .then(data => {
+        setMessages(data)
+        const lastSubj = [...data].reverse().find(m => m.subject)?.subject || ''
+        const base = lastSubj.replace(/^(re:\s*)+/i, '')
+        setSubject(base ? `Re: ${base}` : 'Re:')
+      })
+      .catch(e => notify('Failed to load conversation: ' + e.message, 'error'))
+      .finally(() => setLoading(false))
+  }, [lead.id])
+
+  async function toggleAi() {
+    setTogglingAi(true)
+    try {
+      const upd = kind === 'nurture' ? updateNurtureClient : updateEmailLead
+      await upd(lead.id, { ai_reply_enabled: !aiOn })
+      setAiOn(!aiOn)
+      notify(!aiOn ? 'AI auto-reply turned ON.' : 'AI auto-reply turned OFF — you can reply manually.', 'success')
+    } catch (e) { notify('Failed to update: ' + e.message, 'error') } finally { setTogglingAi(false) }
+  }
+
+  async function send() {
+    if (!subject.trim() || !body.trim() || !lead.email) return
+    setSending(true)
+    try {
+      await sendManualReply({ kind, id: lead.id, to: lead.email, subject, body, threadId: lead.thread_id || '' })
+      setMessages(prev => [...prev, { id: 'local-' + Date.now(), direction: 'outbound', subject, body, created_at: new Date().toISOString() }])
+      setBody('')
+      setComposerKey(k => k + 1)
+      setShowComposer(false)
+      notify('Reply sent.', 'success')
+    } catch (e) { notify('Failed to send: ' + e.message, 'error') } finally { setSending(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[88vh]">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{lead.name || lead.email}</h3>
+            <p className="text-xs text-slate-400 truncate">{lead.email}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${leadStatusColors[lead.status] || 'bg-slate-100 text-slate-600'}`}>
+              {lead.replied && <MessageSquareReply size={9} className="inline mr-0.5 -mt-0.5" />}{lead.status}
+            </span>
+            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+          </div>
+        </div>
+
+        {/* AI auto-reply toggle */}
+        <div className="px-6 py-2.5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Sparkles size={14} className={aiOn ? 'text-violet-500' : 'text-slate-400'} />
+            <span className="text-slate-700 dark:text-slate-200">AI auto-reply</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${aiOn ? 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{aiOn ? 'On' : 'Off'}</span>
+          </div>
+          {!isDemo && (
+            <button onClick={toggleAi} disabled={togglingAi} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${aiOn ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-violet-600 hover:bg-violet-700 text-white'}`}>
+              {togglingAi ? <Loader2 size={12} className="animate-spin" /> : (aiOn ? <Pause size={12} /> : <Play size={12} />)}
+              {aiOn ? 'Stop AI — I’ll reply' : 'Enable AI replies'}
+            </button>
+          )}
+        </div>
+
+        <div className="px-6 py-2 border-b border-slate-100 dark:border-slate-700 grid grid-cols-3 gap-2 text-xs">
+          <div><span className="text-slate-400">Emails sent</span><div className="font-medium text-slate-700 dark:text-slate-200">{lead.emails_sent || 0}</div></div>
+          <div><span className="text-slate-400">Last sent</span><div className="font-medium text-slate-700 dark:text-slate-200">{fmtDateTime(lead.last_sent_at)}</div></div>
+          <div><span className="text-slate-400">Next send</span><div className="font-medium text-slate-700 dark:text-slate-200">{lead.status === 'Active' ? fmtDateTime(lead.next_send_at) : '—'}</div></div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-800/40">
+          {loading ? (
+            <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 size={20} className="animate-spin mr-2" /> Loading...</div>
+          ) : messages.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 text-sm"><Inbox size={28} className="mx-auto mb-2 opacity-40" />No messages logged yet.</div>
+          ) : (
+            messages.map(m => {
+              const inbound = m.direction === 'inbound'
+              return (
+                <div key={m.id} className={`flex ${inbound ? 'justify-start' : 'justify-end'}`}>
+                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${inbound ? 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700' : 'bg-blue-600 text-white'}`}>
+                    <div className={`flex items-center gap-1 text-xs mb-1 ${inbound ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-100'}`}>
+                      {inbound ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
+                      {inbound ? 'Reply received' : 'Sent'}
+                      <span className={inbound ? 'text-slate-400' : 'text-blue-200'}>· {fmtDateTime(m.created_at)}</span>
+                    </div>
+                    {m.subject && <div className={`text-xs font-semibold mb-1 ${inbound ? 'text-slate-700 dark:text-slate-200' : 'text-white'}`}>{m.subject}</div>}
+                    {inbound
+                      ? <div className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">{m.body}</div>
+                      : <div className="text-sm whitespace-pre-wrap break-words text-white" dangerouslySetInnerHTML={{ __html: m.body || '' }} />}
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Composer */}
+        <div className="border-t border-slate-100 dark:border-slate-700">
+          {isDemo ? (
+            <div className="px-6 py-3 text-xs text-slate-400">Read-only demo — replying is disabled.</div>
+          ) : !showComposer ? (
+            <div className="px-6 py-3 flex items-center justify-between">
+              <span className="text-xs text-slate-400">{aiOn ? 'AI is handling replies. Stop AI above to take over.' : 'AI is off — write your reply below.'}</span>
+              <button onClick={() => setShowComposer(true)} disabled={!lead.email} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+                <Mail size={13} /> Write reply
+              </button>
+            </div>
+          ) : (
+            <div className="px-5 py-3 space-y-2">
+              <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" className={inputCls} />
+              <RichTextEditor key={composerKey} value={body} onChange={setBody} placeholder="Write your reply…" />
+              <div className="flex items-center justify-end gap-2">
+                <button onClick={() => setShowComposer(false)} className="px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                <button onClick={send} disabled={sending || !subject.trim() || !body.trim()} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors">
+                  {sending ? <Loader2 size={12} className="animate-spin" /> : <ArrowUpRight size={12} />} Send Reply
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -753,6 +909,8 @@ function CampaignDetail({ campaign, onUpdated }) {
   const [loading, setLoading] = useState(true)
   const [addingLeads, setAddingLeads] = useState(false)
   const [confirmLead, setConfirmLead] = useState(null)
+  const [convoLead, setConvoLead] = useState(null)
+  const [leadFilter, setLeadFilter] = useState('All')
   const [sched, setSched] = useState({
     daily_limit: campaign.daily_limit ?? 50,
     send_days: campaign.send_days ?? '1,2,3,4,5,6,7',
@@ -846,6 +1004,11 @@ function CampaignDetail({ campaign, onUpdated }) {
   const active = leads.filter(l => l.status === 'Active').length
   const replied = leads.filter(l => l.replied).length
   const completed = leads.filter(l => l.status === 'Completed').length
+  const filteredLeads = leadFilter === 'All'
+    ? leads
+    : leadFilter === 'Replied'
+      ? leads.filter(l => l.replied)
+      : leads.filter(l => l.status === leadFilter)
 
   return (
     <div className="space-y-5">
@@ -944,7 +1107,7 @@ function CampaignDetail({ campaign, onUpdated }) {
 
           {/* Leads */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2">
                 <Users size={15} className="text-blue-500" /> Leads
               </h3>
@@ -952,13 +1115,23 @@ function CampaignDetail({ campaign, onUpdated }) {
                 <Plus size={13} /> Add Leads
               </button>
             </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {['All', 'Active', 'Replied', 'Completed'].map(f => {
+                const count = f === 'All' ? leads.length : f === 'Replied' ? leads.filter(l => l.replied).length : leads.filter(l => l.status === f).length
+                return (
+                  <button key={f} onClick={() => setLeadFilter(f)} className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${leadFilter === f ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                    {f} <span className={leadFilter === f ? 'text-white/70' : 'text-slate-400'}>· {count}</span>
+                  </button>
+                )
+              })}
+            </div>
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              {leads.length === 0 ? (
-                <div className="py-10 text-center text-slate-400 text-sm">No leads enrolled yet.</div>
+              {filteredLeads.length === 0 ? (
+                <div className="py-10 text-center text-slate-400 text-sm">{leads.length === 0 ? 'No leads enrolled yet.' : 'No leads in this view.'}</div>
               ) : (
                 <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-[32rem] overflow-y-auto">
-                  {leads.map(l => (
-                    <div key={l.id} className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors group">
+                  {filteredLeads.map(l => (
+                    <div key={l.id} onClick={() => setConvoLead(l)} title="View conversation" className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer group">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{l.name || l.email}</span>
@@ -968,6 +1141,10 @@ function CampaignDetail({ campaign, onUpdated }) {
                           </span>
                         </div>
                         <div className="text-xs text-slate-400 truncate">{l.email}{l.service ? ` · ${l.service}` : ''}</div>
+                        <div className="text-xs mt-0.5 flex items-center gap-2 flex-wrap">
+                          {l.last_sent_at && <span className="text-slate-400">Sent {fmtDateTime(l.last_sent_at)}</span>}
+                          {l.status === 'Active' && l.next_send_at && <span className="text-blue-500 dark:text-blue-400 flex items-center gap-0.5"><Clock size={10} /> Next {fmtDateTime(l.next_send_at)}</span>}
+                        </div>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <div className="text-xs text-slate-500 dark:text-slate-300 flex items-center gap-1 justify-end">
@@ -976,7 +1153,7 @@ function CampaignDetail({ campaign, onUpdated }) {
                         <div className="text-xs text-slate-400">step {l.current_step}</div>
                       </div>
                       <button
-                        onClick={() => setConfirmLead(l)}
+                        onClick={(e) => { e.stopPropagation(); setConfirmLead(l) }}
                         className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 size={13} />
@@ -989,6 +1166,8 @@ function CampaignDetail({ campaign, onUpdated }) {
           </div>
         </div>
       )}
+
+      {convoLead && <LeadConversationModal lead={convoLead} onClose={() => setConvoLead(null)} />}
 
       {addingLeads && (
         <AddLeadsModal

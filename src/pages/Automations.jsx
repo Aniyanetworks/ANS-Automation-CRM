@@ -247,7 +247,7 @@ function AutomationCard({ config, stats, status, onToggle }) {
                   )}
                 </div>
                 <span className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0">
-                  {exec.timestamp ? new Date(exec.timestamp).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                  {exec.timestamp ? new Date(exec.timestamp).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '—'}
                 </span>
               </div>
             )) : (
@@ -260,7 +260,7 @@ function AutomationCard({ config, stats, status, onToggle }) {
           <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
             <Clock size={12} />
             {lastRun
-              ? `Last run: ${new Date(lastRun).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+              ? `Last run: ${new Date(lastRun).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' })}`
               : 'No runs yet'}
           </div>
           {config.webhook && (

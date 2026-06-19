@@ -64,7 +64,7 @@ function MessageModal({ contact, onClose }) {
             )}
             <span className="ml-auto text-xs text-slate-400">
               {contact.last_action_date
-                ? new Date(contact.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                ? new Date(contact.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' })
                 : '—'}
             </span>
           </div>
@@ -266,7 +266,7 @@ export default function Followups() {
                       <span className="block text-xs text-slate-400 mt-0.5 truncate max-w-[9rem]">{c.email}</span>
                     )}
                     <span className="block text-xs text-slate-400 mt-0.5">
-                      {c.last_action_date ? new Date(c.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) : '—'}
+                      {c.last_action_date ? new Date(c.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) : '—'}
                     </span>
                   </div>
                   <ChevronRight size={16} className="text-slate-300 group-hover:text-slate-500 flex-shrink-0 transition-colors" />
@@ -353,7 +353,7 @@ export default function Followups() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap">
-                        {ex.timestamp ? new Date(ex.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                        {ex.timestamp ? new Date(ex.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '—'}
                       </td>
                     </tr>
                   )

@@ -1,0 +1,143 @@
+{
+  "name": "Manual Reply Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "manual-reply",
+        "responseMode": "onReceived",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "mrs-0001-4001-9001-000000000001",
+      "name": "Manual Reply Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-640, 240],
+      "webhookId": "manual-reply-aniya-crm"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.body.to }}",
+        "subject": "={{ $json.body.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body.body + '<br><br>Take care,<br>Manam Parvez<br>Aniya Networks Solutions Inc.' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "mrs-0002-4002-9002-000000000002",
+      "name": "Send Manual Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [-416, 240],
+      "webhookId": "mrs-gmail-0002",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "5m7tLE66Mg5tj0xf",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Manual Reply Webhook').item.json.body.kind }}",
+              "value2": "email"
+            }
+          ]
+        }
+      },
+      "id": "mrs-0003-4003-9003-000000000003",
+      "name": "Is Email Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-192, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "lead_id", "value": "={{ $('Manual Reply Webhook').item.json.body.id }}" },
+            { "name": "direction", "value": "outbound" },
+            { "name": "subject", "value": "={{ $('Manual Reply Webhook').item.json.body.subject }}" },
+            { "name": "body", "value": "={{ $('Manual Reply Webhook').item.json.body.body }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mrs-0004-4004-9004-000000000004",
+      "name": "Save to Email Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [32, 144],
+      "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "client_id", "value": "={{ $('Manual Reply Webhook').item.json.body.id }}" },
+            { "name": "direction", "value": "outbound" },
+            { "name": "subject", "value": "={{ $('Manual Reply Webhook').item.json.body.subject }}" },
+            { "name": "body", "value": "={{ $('Manual Reply Webhook').item.json.body.body }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mrs-0005-4005-9005-000000000005",
+      "name": "Save to Nurture Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [32, 336],
+      "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Manual Reply Webhook": { "main": [ [ { "node": "Send Manual Email", "type": "main", "index": 0 } ] ] },
+    "Send Manual Email": { "main": [ [ { "node": "Is Email Lead?", "type": "main", "index": 0 } ] ] },
+    "Is Email Lead?": {
+      "main": [
+        [ { "node": "Save to Email Thread", "type": "main", "index": 0 } ],
+        [ { "node": "Save to Nurture Thread", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5ed296676961c5ed41c639e1683078855c8f50e4c5aa1466963b063405345b3e"
+  }
+}

@@ -2,6 +2,21 @@ import { supabase } from '../lib/supabase'
 import { isDemo, blockIfDemo } from '../lib/demo'
 import * as demo from '../data/demoData'
 
+const N8N_WEBHOOK = 'https://n8n.srv1300653.hstgr.cloud/webhook'
+
+// Sends a manual reply through the n8n "Manual Reply Sender" workflow (Gmail).
+// payload: { kind: 'email'|'nurture', id, to, subject, body, threadId }
+export async function sendManualReply(payload) {
+  blockIfDemo()
+  const res = await fetch(`${N8N_WEBHOOK}/manual-reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) throw new Error('Send failed (HTTP ' + res.status + ')')
+  return true
+}
+
 // In demo mode, reads return fake data and writes throw a friendly error.
 
 // ─── CONTACTS ────────────────────────────────────────────────────────────────
@@ -408,6 +423,29 @@ export async function deleteEmailLead(id) {
   if (error) throw error
 }
 
+export async function updateEmailLead(id, updates) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('email_leads')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getEmailMessages(leadId) {
+  if (isDemo()) return demo.demoEmailMessages[leadId] || []
+  const { data, error } = await supabase
+    .from('email_messages')
+    .select('*')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
 export async function getAllEmailLeads() {
   if (isDemo()) return Object.values(demo.demoLeads).flat()
   const { data, error } = await supabase
@@ -471,6 +509,17 @@ export async function deleteNurtureClient(id) {
     .delete()
     .eq('id', id)
   if (error) throw error
+}
+
+export async function getNurtureMessages(clientId) {
+  if (isDemo()) return demo.demoNurtureMessages[clientId] || []
+  const { data, error } = await supabase
+    .from('nurture_messages')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data
 }
 
 export async function getAllNurtureClients() {

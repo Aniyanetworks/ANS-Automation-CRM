@@ -198,8 +198,8 @@
       ],
       "credentials": {
         "openAiApi": {
-          "id": "REPLACE_OPENAI_CRED",
-          "name": "OpenAi account"
+          "id": "fj3WhBV98VkK9qr3",
+          "name": "Manam- OpenAi account"
         }
       }
     },
@@ -226,6 +226,130 @@
         "gmailOAuth2": {
           "id": "5m7tLE66Mg5tj0xf",
           "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $('Pick Client').item.json.id }}"
+            },
+            {
+              "name": "direction",
+              "value": "inbound"
+            },
+            {
+              "name": "subject",
+              "value": "={{ $('Extract Reply').item.json.subject }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Extract Reply').item.json.body }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a7b8c9d0-0aa2-4aa2-9aa2-000000000aa2",
+      "name": "Save Inbound",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -784,
+        -360
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "={{ $('Pick Client').item.json.id }}"
+            },
+            {
+              "name": "direction",
+              "value": "outbound"
+            },
+            {
+              "name": "subject",
+              "value": "={{ 'Re: ' + $('Extract Reply').item.json.subject }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Draft Reply').item.json.output }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a7b8c9d0-0aa3-4aa3-9aa3-000000000aa3",
+      "name": "Save AI Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -560,
+        -360
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
         }
       },
       "onError": "continueRegularOutput"
@@ -299,6 +423,26 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $('Pick Client').item.json.ai_reply_enabled === false ? false : true }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "aigate-nurt-0001-4bbb-9bbb-000000000bbb",
+      "name": "AI Enabled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1700,
+        560
+      ]
     }
   ],
   "connections": {
@@ -339,7 +483,36 @@
       "main": [
         [
           {
+            "node": "Save Inbound",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Inbound": {
+      "main": [
+        [
+          {
+            "node": "AI Enabled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Enabled?": {
+      "main": [
+        [
+          {
             "node": "Get Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Reply",
             "type": "main",
             "index": 0
           }
@@ -380,6 +553,17 @@
       ]
     },
     "Send Reply": {
+      "main": [
+        [
+          {
+            "node": "Save AI Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save AI Reply": {
       "main": [
         [
           {
