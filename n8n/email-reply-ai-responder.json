@@ -222,7 +222,7 @@
         "promptType": "define",
         "text": "={{ $('Extract Reply').item.json.body }}",
         "options": {
-          "systemMessage": "={{ ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'You are a helpful sales assistant. Reply warmly and concisely.') + '\\n\\n--- Lead context ---\\nName: ' + ($('Pick Lead').item.json.name || '') + '\\nEmail: ' + ($('Pick Lead').item.json.email || '') + '\\nService of interest: ' + ($('Pick Lead').item.json.service || '') + '\\n\\nThe user message is the lead\\'s email reply. Write a helpful, concise reply as the email body only. No subject line. Do NOT add any sign-off, closing line, signature, or name (such as Warm regards or [Your Name]) — a signature is appended automatically, so end with your final sentence.' }}"
+          "systemMessage": "={{ ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'You are a helpful sales assistant for Aniya Network Solutions. Reply warmly and concisely.') + '\\n\\n--- Lead ---\\nName: ' + ($('Pick Lead').item.json.name || '') + '\\nEmail: ' + ($('Pick Lead').item.json.email || '') + '\\n\\n--- Full email conversation so far (oldest first) ---\\n' + $('Build Context').item.json.transcript + '\\n\\nThe user message is the client\\'s latest reply. Reply as the next message in THIS conversation, using the full history above for context, and answer their actual question. Write ONLY the email body — no subject line, and do NOT add any sign-off, closing, signature, or name (a signature is appended automatically).' }}"
         }
       },
       "id": "5d9ec7b8-1ca0-4e5a-ace0-40653077ad47",
@@ -498,6 +498,72 @@
         1600,
         -380
       ]
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/email_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "lead_id",
+              "value": "=eq.{{ $('Pick Lead').item.json.id }}"
+            },
+            {
+              "name": "select",
+              "value": "direction,body,created_at"
+            },
+            {
+              "name": "order",
+              "value": "created_at.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ctx-thread-email-0001",
+      "name": "Get Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        40
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = [];\nfor (const it of $input.all()) { const v = it.json; if (Array.isArray(v)) { for (const m of v) rows.push(m); } else if (v && v.direction) { rows.push(v); } }\nconst strip = (h) => String(h || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/[ \\t\\r\\n]+/g, ' ').trim();\nconst lines = rows.map(m => (m.direction === 'inbound' ? 'Client' : 'Us') + ': ' + strip(m.body)).filter(Boolean);\nconst transcript = lines.join(String.fromCharCode(10)) || '(no prior messages)';\nreturn [{ json: { transcript } }];"
+      },
+      "id": "ctx-build-email-0001",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2040,
+        40
+      ]
     }
   ],
   "connections": {
@@ -589,7 +655,7 @@
       "main": [
         [
           {
-            "node": "AI Draft Reply",
+            "node": "Get Thread",
             "type": "main",
             "index": 0
           }
@@ -634,6 +700,28 @@
         [
           {
             "node": "Log Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Thread": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "AI Draft Reply",
             "type": "main",
             "index": 0
           }

@@ -165,7 +165,7 @@
         "promptType": "define",
         "text": "={{ $('Extract Reply').item.json.body }}",
         "options": {
-          "systemMessage": "={{ 'You are replying on behalf of Aniya Network Solutions to a PAST client who just replied to one of our relationship check-in emails. Tone guidance: ' + ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'Warm, friendly, personal.') + '\\n\\n--- Client ---\\nName: ' + $('Pick Client').item.json.name + '\\nOur history / notes: ' + ($('Pick Client').item.json.note || '(none)') + '\\n\\nThe user message is their latest reply. Write a warm, personal, human response that continues the conversation naturally and answers anything they raised. This is purely about the relationship, NOT a sales pitch — do not promote services, pricing, or ask for business. Write ONLY the email body. Do NOT add any sign-off, closing line, signature, or name — a signature is appended automatically, so end with your final sentence.' }}"
+          "systemMessage": "={{ 'You are replying on behalf of Aniya Network Solutions to a PAST client. Tone guidance: ' + ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'Warm, friendly, personal.') + '\\n\\n--- Client ---\\nName: ' + ($('Pick Client').item.json.name || '') + '\\nOur history / notes: ' + ($('Pick Client').item.json.note || '(none)') + '\\n\\n--- Full email conversation so far (oldest first) ---\\n' + $('Build Context').item.json.transcript + '\\n\\nThe user message is the client\\'s latest reply. Reply as the next message in THIS conversation, using the full history above for context. Warm and personal, NOT a sales pitch. Write ONLY the email body — no subject, and do NOT add any sign-off, closing, signature, or name (a signature is appended automatically).' }}"
         }
       },
       "id": "a7b8c9d0-0006-4a06-9a06-000000000006",
@@ -443,6 +443,72 @@
         -1700,
         560
       ]
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/nurture_messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "=eq.{{ $('Pick Client').item.json.id }}"
+            },
+            {
+              "name": "select",
+              "value": "direction,body,created_at"
+            },
+            {
+              "name": "order",
+              "value": "created_at.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ctx-thread-nurt-0001",
+      "name": "Get Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1480,
+        360
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SehDVTutwS7XzjTn",
+          "name": "Supabase ANS CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = [];\nfor (const it of $input.all()) { const v = it.json; if (Array.isArray(v)) { for (const m of v) rows.push(m); } else if (v && v.direction) { rows.push(v); } }\nconst strip = (h) => String(h || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/[ \\t\\r\\n]+/g, ' ').trim();\nconst lines = rows.map(m => (m.direction === 'inbound' ? 'Client' : 'Us') + ': ' + strip(m.body)).filter(Boolean);\nconst transcript = lines.join(String.fromCharCode(10)) || '(no prior messages)';\nreturn [{ json: { transcript } }];"
+      },
+      "id": "ctx-build-nurt-0001",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1260,
+        360
+      ]
     }
   ],
   "connections": {
@@ -523,7 +589,7 @@
       "main": [
         [
           {
-            "node": "Draft Reply",
+            "node": "Get Thread",
             "type": "main",
             "index": 0
           }
@@ -568,6 +634,28 @@
         [
           {
             "node": "Log Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Thread": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "Draft Reply",
             "type": "main",
             "index": 0
           }

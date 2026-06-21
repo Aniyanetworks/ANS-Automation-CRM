@@ -477,14 +477,14 @@ function RichTextEditor({ value, onChange, placeholder, chips = [] }) {
 // ── Step Editor Row ───────────────────────────────────────────────────────────
 
 function StepRow({ step, index, onSave, onDelete }) {
-  const [form, setForm] = useState({ subject: step.subject || '', body: step.body || '', delay_days: step.delay_days ?? 0 })
+  const [form, setForm] = useState({ subject: step.subject || '', body: step.body || '', delay_days: step.delay_days ?? 0, delay_unit: step.delay_unit || 'days' })
   const [saving, setSaving] = useState(false)
-  const dirty = form.subject !== (step.subject || '') || form.body !== (step.body || '') || Number(form.delay_days) !== (step.delay_days ?? 0)
+  const dirty = form.subject !== (step.subject || '') || form.body !== (step.body || '') || Number(form.delay_days) !== (step.delay_days ?? 0) || form.delay_unit !== (step.delay_unit || 'days')
 
   async function save() {
     setSaving(true)
     try {
-      await onSave(step.id, { subject: form.subject, body: form.body, delay_days: Number(form.delay_days) || 0 })
+      await onSave(step.id, { subject: form.subject, body: form.body, delay_days: Number(form.delay_days) || 0, delay_unit: form.delay_unit })
     } finally {
       setSaving(false)
     }
@@ -508,7 +508,16 @@ function StepRow({ step, index, onSave, onDelete }) {
                 onChange={e => setForm(f => ({ ...f, delay_days: e.target.value }))}
                 className="w-14 px-1.5 py-0.5 text-xs text-center border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
               />
-              days after previous
+              <select
+                value={form.delay_unit}
+                onChange={e => setForm(f => ({ ...f, delay_unit: e.target.value }))}
+                className="px-1.5 py-0.5 text-xs border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
+              after previous
             </span>
           )}
         </div>
@@ -725,6 +734,9 @@ function NurtureDetail({ campaign, onUpdated }) {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name || c.email}</span>
                       <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'Active' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{c.status}</span>
+                      <span title="AI auto-reply" className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-0.5 ${c.ai_reply_enabled === false ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300' : 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'}`}>
+                        <Sparkles size={9} /> AI {c.ai_reply_enabled === false ? 'off' : 'on'}
+                      </span>
                     </div>
                     <div className="text-xs text-slate-400 truncate">{c.email}</div>
                     <div className="text-xs mt-0.5 flex items-center gap-2 flex-wrap">
@@ -756,7 +768,7 @@ function NurtureDetail({ campaign, onUpdated }) {
 // All campaign send times are shown in EST (America/Toronto), regardless of the viewer's timezone.
 function fmtDateTime(ts) {
   if (!ts) return '—'
-  return new Date(ts).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto', timeZoneName: 'short' })
+  return new Date(ts).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) + ' EST'
 }
 
 function LeadConversationModal({ lead, onClose, fetchMessages = getEmailMessages, kind = 'email' }) {
@@ -798,7 +810,7 @@ function LeadConversationModal({ lead, onClose, fetchMessages = getEmailMessages
     if (!subject.trim() || !body.trim() || !lead.email) return
     setSending(true)
     try {
-      await sendManualReply({ kind, id: lead.id, to: lead.email, subject, body, threadId: lead.thread_id || '' })
+      await sendManualReply({ kind, id: lead.id, to: lead.email, subject, body, threadId: lead.thread_id || '', messageId: lead.message_id || '' })
       setMessages(prev => [...prev, { id: 'local-' + Date.now(), direction: 'outbound', subject, body, created_at: new Date().toISOString() }])
       setBody('')
       setComposerKey(k => k + 1)
@@ -958,6 +970,7 @@ function CampaignDetail({ campaign, onUpdated }) {
         subject: '',
         body: '',
         delay_days: nextNum === 0 ? 0 : 2,
+        delay_unit: 'days',
       })
       setSteps(prev => [...prev, created])
     } catch (e) {
@@ -1138,6 +1151,9 @@ function CampaignDetail({ campaign, onUpdated }) {
                           <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${leadStatusColors[l.status] || 'bg-slate-100 text-slate-600'}`}>
                             {l.replied && <MessageSquareReply size={9} className="inline mr-0.5 -mt-0.5" />}
                             {l.status}
+                          </span>
+                          <span title="AI auto-reply" className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-0.5 ${l.ai_reply_enabled === false ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300' : 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'}`}>
+                            <Sparkles size={9} /> AI {l.ai_reply_enabled === false ? 'off' : 'on'}
                           </span>
                         </div>
                         <div className="text-xs text-slate-400 truncate">{l.email}{l.service ? ` · ${l.service}` : ''}</div>

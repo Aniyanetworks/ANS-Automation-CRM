@@ -14,15 +14,56 @@
       "name": "Manual Reply Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-640, 240],
+      "position": [-820, 240],
       "webhookId": "manual-reply-aniya-crm"
     },
     {
       "parameters": {
-        "sendTo": "={{ $json.body.to }}",
-        "subject": "={{ $json.body.subject }}",
+        "url": "={{ 'https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/' + ($json.body.kind === 'email' ? 'email_leads' : 'nurture_clients') }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "id", "value": "=eq.{{ $json.body.id }}" },
+            { "name": "select", "value": "message_id,thread_id" },
+            { "name": "limit", "value": "1" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mrs-0006-4006-9006-000000000006",
+      "name": "Get Latest Message Id",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-600, 240],
+      "alwaysOutputData": true,
+      "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $('Manual Reply Webhook').first().json.body || {};\nlet mid = '';\nfor (const it of $input.all()) {\n  const v = it.json;\n  if (Array.isArray(v)) { if (v[0] && v[0].message_id) mid = v[0].message_id; }\n  else if (v && v.message_id) mid = v.message_id;\n}\nmid = mid || b.messageId || '';\nreturn [{ json: { kind: b.kind, id: b.id, to: b.to, subject: b.subject, body: b.body, messageId: mid } }];"
+      },
+      "id": "mrs-0007-4007-9007-000000000007",
+      "name": "Prepare Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-380, 240]
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $json.messageId }}",
         "emailType": "html",
-        "message": "={{ $json.body.body + '<br><br>Take care,<br>Manam Parvez<br>Aniya Networks Solutions Inc.' }}",
+        "message": "={{ $json.body + '<br><br>Take care,<br>Manam Parvez<br>Aniya Networks Solutions Inc.' }}",
         "options": {
           "appendAttribution": false
         }
@@ -31,7 +72,7 @@
       "name": "Send Manual Email",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [-416, 240],
+      "position": [-160, 240],
       "webhookId": "mrs-gmail-0002",
       "credentials": {
         "gmailOAuth2": {
@@ -46,7 +87,7 @@
         "conditions": {
           "string": [
             {
-              "value1": "={{ $('Manual Reply Webhook').item.json.body.kind }}",
+              "value1": "={{ $('Prepare Reply').item.json.kind }}",
               "value2": "email"
             }
           ]
@@ -56,7 +97,7 @@
       "name": "Is Email Lead?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [-192, 240]
+      "position": [60, 240]
     },
     {
       "parameters": {
@@ -75,10 +116,10 @@
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "lead_id", "value": "={{ $('Manual Reply Webhook').item.json.body.id }}" },
+            { "name": "lead_id", "value": "={{ $('Prepare Reply').item.json.id }}" },
             { "name": "direction", "value": "outbound" },
-            { "name": "subject", "value": "={{ $('Manual Reply Webhook').item.json.body.subject }}" },
-            { "name": "body", "value": "={{ $('Manual Reply Webhook').item.json.body.body }}" }
+            { "name": "subject", "value": "={{ $('Prepare Reply').item.json.subject }}" },
+            { "name": "body", "value": "={{ $('Prepare Reply').item.json.body }}" }
           ]
         },
         "options": {}
@@ -87,7 +128,7 @@
       "name": "Save to Email Thread",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [32, 144],
+      "position": [280, 144],
       "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } },
       "onError": "continueRegularOutput"
     },
@@ -108,10 +149,10 @@
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "client_id", "value": "={{ $('Manual Reply Webhook').item.json.body.id }}" },
+            { "name": "client_id", "value": "={{ $('Prepare Reply').item.json.id }}" },
             { "name": "direction", "value": "outbound" },
-            { "name": "subject", "value": "={{ $('Manual Reply Webhook').item.json.body.subject }}" },
-            { "name": "body", "value": "={{ $('Manual Reply Webhook').item.json.body.body }}" }
+            { "name": "subject", "value": "={{ $('Prepare Reply').item.json.subject }}" },
+            { "name": "body", "value": "={{ $('Prepare Reply').item.json.body }}" }
           ]
         },
         "options": {}
@@ -120,13 +161,15 @@
       "name": "Save to Nurture Thread",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [32, 336],
+      "position": [280, 336],
       "credentials": { "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" } },
       "onError": "continueRegularOutput"
     }
   ],
   "connections": {
-    "Manual Reply Webhook": { "main": [ [ { "node": "Send Manual Email", "type": "main", "index": 0 } ] ] },
+    "Manual Reply Webhook": { "main": [ [ { "node": "Get Latest Message Id", "type": "main", "index": 0 } ] ] },
+    "Get Latest Message Id": { "main": [ [ { "node": "Prepare Reply", "type": "main", "index": 0 } ] ] },
+    "Prepare Reply": { "main": [ [ { "node": "Send Manual Email", "type": "main", "index": 0 } ] ] },
     "Send Manual Email": { "main": [ [ { "node": "Is Email Lead?", "type": "main", "index": 0 } ] ] },
     "Is Email Lead?": {
       "main": [
