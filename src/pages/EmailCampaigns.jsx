@@ -8,8 +8,8 @@ import {
 import {
   getEmailCampaigns, createEmailCampaign, updateEmailCampaign, deleteEmailCampaign,
   getEmailSteps, createEmailStep, updateEmailStep, deleteEmailStep,
-  getEmailLeads, createEmailLeads, deleteEmailLead,
-  getNurtureClients, updateNurtureClient, deleteNurtureClient,
+  getEmailLeads, createEmailLeads, deleteEmailLead, updateEmailLeadsByCampaign,
+  getNurtureClients, updateNurtureClient, deleteNurtureClient, updateNurtureClientsByCampaign,
   getEmailMessages, getNurtureMessages, updateEmailLead, sendManualReply,
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -43,6 +43,52 @@ function toggleDayCsv(csv, n) {
   const set = new Set((csv || '').split(',').map(x => parseInt(x.trim(), 10)).filter(Boolean))
   set.has(n) ? set.delete(n) : set.add(n)
   return [...set].sort((a, b) => a - b).join(',')
+}
+
+// The next moment the campaign's sending window opens, as an ISO string.
+// Mirrors the scheduler's gate: only allowed weekdays (1=Mon..7=Sun) and the
+// [startHour, endHour) window, evaluated in America/Toronto (EST/EDT). If we're
+// already inside an open window on an allowed day, returns now (send asap).
+function nextWindowStart(startHour, endHour, daysCsv) {
+  const tz = 'America/Toronto'
+  const start = Number(startHour) || 0
+  const end = endHour == null ? 24 : Number(endHour)
+  const allowed = new Set(String(daysCsv ?? '1,2,3,4,5,6,7').split(',').map(x => parseInt(x.trim(), 10)).filter(Boolean))
+  const now = new Date()
+  if (allowed.size === 0) return now.toISOString()
+  // Convert a Toronto wall-clock (y, m[1-12], d, h) to the correct UTC instant.
+  const toUtc = (y, m, d, h) => {
+    const guess = Date.UTC(y, m - 1, d, h, 0, 0)
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false })
+    const p = f.formatToParts(new Date(guess)).reduce((a, x) => (a[x.type] = x.value, a), {})
+    const asTz = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second)
+    return new Date(guess - (asTz - guess))
+  }
+  for (let i = 0; i < 8; i++) {
+    const sample = new Date(now.getTime() + i * 86400000)
+    const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' })
+    const p = f.formatToParts(sample).reduce((a, x) => (a[x.type] = x.value, a), {})
+    const y = +p.year, m = +p.month, d = +p.day
+    const weekday = ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1 // 1=Mon..7=Sun
+    if (!allowed.has(weekday)) continue
+    const winStart = toUtc(y, m, d, start)
+    const winEnd = end >= 24 ? new Date(toUtc(y, m, d, 0).getTime() + 24 * 3600000) : toUtc(y, m, d, end)
+    if (i === 0) {
+      if (now < winEnd) return new Date(Math.max(now.getTime(), winStart.getTime())).toISOString()
+    } else {
+      return winStart.toISOString()
+    }
+  }
+  return now.toISOString()
+}
+
+function Toggle({ checked, onChange, disabled }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-600'}`}>
+      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  )
 }
 
 function SendScheduleControls({ daily, days, startH, endH, onDaily, onDays, onStart, onEnd }) {
@@ -88,7 +134,7 @@ function SendScheduleControls({ daily, days, startH, endH, onDaily, onDays, onSt
 
 function CampaignModal({ onClose, onCreate }) {
   const notify = useNotify()
-  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, interval_unit: 'days', daily_limit: 50, send_days: '1,2,3,4,5', send_start_hour: 9, send_end_hour: 18, ai_reply_prompt: DEFAULT_PROMPT })
+  const [form, setForm] = useState({ name: '', type: 'outreach', from_name: '', from_email: '', interval_days: 30, interval_unit: 'days', daily_limit: 50, send_days: '1,2,3,4,5', send_start_hour: 9, send_end_hour: 18, ai_reply_prompt: DEFAULT_PROMPT, ai_reply_enabled: true, reply_delay_minutes: 0, auto_followup_enabled: true })
   const [saving, setSaving] = useState(false)
 
   const isNurture = form.type === 'nurture'
@@ -117,6 +163,7 @@ function CampaignModal({ onClose, onCreate }) {
         daily_limit: Number(form.daily_limit) || 50,
         send_start_hour: Number(form.send_start_hour) || 0,
         send_end_hour: Number(form.send_end_hour) || 24,
+        reply_delay_minutes: Math.max(0, Number(form.reply_delay_minutes) || 0),
         status: isNurture ? 'Active' : 'Paused',
       })
       onCreate(created)
@@ -202,6 +249,37 @@ function CampaignModal({ onClose, onCreate }) {
             <textarea value={form.ai_reply_prompt} onChange={e => setForm(f => ({ ...f, ai_reply_prompt: e.target.value }))} rows={4} className={`${inputCls} resize-none`} />
             <p className="text-xs text-slate-400 mt-1">{isNurture ? 'Guides the AI when writing each monthly check-in, using the client note.' : 'Used by the AI agent to reply when a lead responds.'}</p>
           </div>
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-3">
+            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Reply Settings</div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-200">AI auto-reply</div>
+                <p className="text-xs text-slate-400">When on, the AI automatically replies to {isNurture ? 'clients' : 'leads'} who respond. New {isNurture ? 'clients' : 'leads'} inherit this.</p>
+              </div>
+              <Toggle checked={form.ai_reply_enabled} onChange={v => setForm(f => ({ ...f, ai_reply_enabled: v }))} />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Reply delay</div>
+                <p className="text-xs text-slate-400">Wait this long before sending the AI reply (0 = instant).</p>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <input type="number" min="0" disabled={!form.ai_reply_enabled} value={form.reply_delay_minutes} onChange={e => setForm(f => ({ ...f, reply_delay_minutes: e.target.value }))} className={`${inputCls} w-20 disabled:opacity-50`} />
+                <span className="text-xs text-slate-400">min</span>
+              </div>
+            </div>
+          </div>
+          {!isNurture && (
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Automatic follow-ups</div>
+                  <p className="text-xs text-slate-400">Send the follow-up sequence automatically until the lead replies. Off = first email only.</p>
+                </div>
+                <Toggle checked={form.auto_followup_enabled} onChange={v => setForm(f => ({ ...f, auto_followup_enabled: v }))} />
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create Campaign
@@ -249,7 +327,7 @@ function parseCsv(text) {
   return rows
 }
 
-function AddLeadsModal({ campaignId, onClose, onAdded }) {
+function AddLeadsModal({ campaignId, aiDefault = true, sendStartHour = 0, sendEndHour = 24, sendDays = '1,2,3,4,5,6,7', onClose, onAdded }) {
   const notify = useNotify()
   const [staged, setStaged] = useState([])
   const [draft, setDraft] = useState({ name: '', email: '', service: '' })
@@ -292,7 +370,9 @@ function AddLeadsModal({ campaignId, onClose, onAdded }) {
     if (staged.length === 0) return
     setSaving(true)
     try {
-      const now = new Date().toISOString()
+      // Schedule the first send for the next time the campaign's window is open,
+      // so the displayed time matches when it will actually go out.
+      const now = nextWindowStart(sendStartHour, sendEndHour, sendDays)
       const rows = staged.map(l => ({
         campaign_id: campaignId,
         name: l.name || '',
@@ -303,6 +383,7 @@ function AddLeadsModal({ campaignId, onClose, onAdded }) {
         next_send_at: now,
         replied: false,
         emails_sent: 0,
+        ai_reply_enabled: aiDefault,
       }))
       const created = await createEmailLeads(rows)
       onAdded(created)
@@ -567,13 +648,16 @@ function NurtureDetail({ campaign, onUpdated }) {
     send_start_hour: campaign.send_start_hour ?? 0,
     send_end_hour: campaign.send_end_hour ?? 24,
   })
+  const [replyDelay, setReplyDelay] = useState(String(campaign.reply_delay_minutes ?? 0))
   const [savingSettings, setSavingSettings] = useState(false)
+  const [applyingAi, setApplyingAi] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setPrompt(campaign.ai_reply_prompt || '')
     setIntervalDays(campaign.interval_days ?? 30)
     setUnit(campaign.interval_unit || 'days')
+    setReplyDelay(String(campaign.reply_delay_minutes ?? 0))
     setSched({
       daily_limit: campaign.daily_limit ?? 50,
       send_days: campaign.send_days ?? '1,2,3,4,5,6,7',
@@ -589,6 +673,7 @@ function NurtureDetail({ campaign, onUpdated }) {
   const settingsDirty = prompt !== (campaign.ai_reply_prompt || '')
     || Number(interval) !== (campaign.interval_days ?? 30)
     || unit !== (campaign.interval_unit || 'days')
+    || (Number(replyDelay) || 0) !== (campaign.reply_delay_minutes ?? 0)
     || Number(sched.daily_limit) !== (campaign.daily_limit ?? 50)
     || sched.send_days !== (campaign.send_days ?? '1,2,3,4,5,6,7')
     || Number(sched.send_start_hour) !== (campaign.send_start_hour ?? 0)
@@ -601,12 +686,23 @@ function NurtureDetail({ campaign, onUpdated }) {
         ai_reply_prompt: prompt,
         interval_days: Number(interval) || 30,
         interval_unit: unit,
+        reply_delay_minutes: Math.max(0, Number(replyDelay) || 0),
         daily_limit: Number(sched.daily_limit) || 50,
         send_days: sched.send_days,
         send_start_hour: Number(sched.send_start_hour) || 0,
         send_end_hour: Number(sched.send_end_hour) || 24,
       }))
     } catch (e) { notify('Failed to save: ' + e.message, 'error') } finally { setSavingSettings(false) }
+  }
+
+  async function setAiForAll(enabled) {
+    setApplyingAi(true)
+    try {
+      onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_enabled: enabled }))
+      await updateNurtureClientsByCampaign(campaign.id, { ai_reply_enabled: enabled })
+      setClients(prev => prev.map(c => ({ ...c, ai_reply_enabled: enabled })))
+      notify(`AI auto-reply turned ${enabled ? 'on' : 'off'} for all clients.`, 'success')
+    } catch (e) { notify('Failed to update AI setting: ' + e.message, 'error') } finally { setApplyingAi(false) }
   }
 
   async function toggleCampaign() {
@@ -698,6 +794,26 @@ function NurtureDetail({ campaign, onUpdated }) {
         <div>
           <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">AI Check-in Prompt</label>
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={4} className={`${inputCls} resize-none`} />
+        </div>
+        <div className="border-t border-slate-100 dark:border-slate-700 pt-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">AI auto-reply for all clients</div>
+            <p className="text-xs text-slate-400">Turn AI auto-reply on or off for every client in this campaign at once.</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {applyingAi && <Loader2 size={13} className="animate-spin text-slate-400" />}
+            <Toggle checked={campaign.ai_reply_enabled !== false} disabled={applyingAi} onChange={setAiForAll} />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Reply delay</div>
+            <p className="text-xs text-slate-400">How long the AI waits before sending its reply (0 = instant). Saved with the button above.</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <input type="number" min="0" value={replyDelay} onChange={e => setReplyDelay(e.target.value)} className={`${inputCls} w-20`} />
+            <span className="text-xs text-slate-400">min</span>
+          </div>
         </div>
         <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Sending Schedule</div>
@@ -947,6 +1063,37 @@ function CampaignDetail({ campaign, onUpdated }) {
     } catch (e) { notify('Failed to save schedule: ' + e.message, 'error') } finally { setSavingSched(false) }
   }
 
+  // Reply & follow-up settings (campaign-level), with a master AI toggle that also
+  // applies to every existing lead so you don't have to flip them one by one.
+  const [replyDelay, setReplyDelay] = useState(String(campaign.reply_delay_minutes ?? 0))
+  const [savingReply, setSavingReply] = useState(false)
+  const [applyingAi, setApplyingAi] = useState(false)
+  const replyDelayDirty = (Number(replyDelay) || 0) !== (campaign.reply_delay_minutes ?? 0)
+  useEffect(() => { setReplyDelay(String(campaign.reply_delay_minutes ?? 0)) }, [campaign.id])
+
+  async function saveReplyDelay() {
+    setSavingReply(true)
+    try {
+      onUpdated(await updateEmailCampaign(campaign.id, { reply_delay_minutes: Math.max(0, Number(replyDelay) || 0) }))
+    } catch (e) { notify('Failed to save reply delay: ' + e.message, 'error') } finally { setSavingReply(false) }
+  }
+
+  async function setAiForAll(enabled) {
+    setApplyingAi(true)
+    try {
+      onUpdated(await updateEmailCampaign(campaign.id, { ai_reply_enabled: enabled }))
+      await updateEmailLeadsByCampaign(campaign.id, { ai_reply_enabled: enabled })
+      setLeads(prev => prev.map(l => ({ ...l, ai_reply_enabled: enabled })))
+      notify(`AI auto-reply turned ${enabled ? 'on' : 'off'} for all leads.`, 'success')
+    } catch (e) { notify('Failed to update AI setting: ' + e.message, 'error') } finally { setApplyingAi(false) }
+  }
+
+  async function toggleAutoFollowup(enabled) {
+    try {
+      onUpdated(await updateEmailCampaign(campaign.id, { auto_followup_enabled: enabled }))
+    } catch (e) { notify('Failed to update follow-up setting: ' + e.message, 'error') }
+  }
+
   useEffect(() => {
     setLoading(true)
     setSched({
@@ -1091,6 +1238,41 @@ function CampaignDetail({ campaign, onUpdated }) {
         <p className="text-xs text-slate-400">Outreach emails only send on these days, within this window, and never more than the daily limit.</p>
       </div>
 
+      {/* Reply & Follow-up Settings */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-4">
+        <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Sparkles size={15} className="text-violet-500" /> Reply &amp; Follow-up Settings</h3>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">AI auto-reply for all leads</div>
+            <p className="text-xs text-slate-400">Turn the AI auto-reply on or off for every lead in this campaign at once.</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {applyingAi && <Loader2 size={13} className="animate-spin text-slate-400" />}
+            <Toggle checked={campaign.ai_reply_enabled !== false} disabled={applyingAi} onChange={setAiForAll} />
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-700 pt-4">
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Reply delay</div>
+            <p className="text-xs text-slate-400">How long the AI waits before sending its reply (0 = instant).</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <input type="number" min="0" value={replyDelay} onChange={e => setReplyDelay(e.target.value)} className={`${inputCls} w-20`} />
+            <span className="text-xs text-slate-400">min</span>
+            <button onClick={saveReplyDelay} disabled={!replyDelayDirty || savingReply} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors">
+              {savingReply ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-700 pt-4">
+          <div>
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Automatic follow-ups</div>
+            <p className="text-xs text-slate-400">Send the follow-up sequence automatically until the lead replies. Off = first email only.</p>
+          </div>
+          <Toggle checked={campaign.auto_followup_enabled !== false} onChange={toggleAutoFollowup} />
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center h-40 text-slate-400">
           <Loader2 size={24} className="animate-spin mr-2" /> Loading...
@@ -1188,6 +1370,10 @@ function CampaignDetail({ campaign, onUpdated }) {
       {addingLeads && (
         <AddLeadsModal
           campaignId={campaign.id}
+          aiDefault={campaign.ai_reply_enabled !== false}
+          sendStartHour={campaign.send_start_hour ?? 0}
+          sendEndHour={campaign.send_end_hour ?? 24}
+          sendDays={campaign.send_days ?? '1,2,3,4,5,6,7'}
           onClose={() => setAddingLeads(false)}
           onAdded={created => setLeads(prev => [...created, ...prev])}
         />

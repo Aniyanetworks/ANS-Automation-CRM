@@ -509,6 +509,21 @@
         -1260,
         360
       ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Number(($('Get Campaign').item.json[0]||{}).reply_delay_minutes) || 0 }}",
+        "unit": "minutes"
+      },
+      "id": "wait-reply-nurt-0001",
+      "name": "Reply Delay",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -1288,
+        988
+      ],
+      "webhookId": "wait-reply-nurt-0001-wh"
     }
   ],
   "connections": {
@@ -611,7 +626,7 @@
       "main": [
         [
           {
-            "node": "Send Reply",
+            "node": "Reply Delay",
             "type": "main",
             "index": 0
           }
@@ -656,6 +671,17 @@
         [
           {
             "node": "Draft Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Delay": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
             "type": "main",
             "index": 0
           }

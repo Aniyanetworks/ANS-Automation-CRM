@@ -435,6 +435,18 @@ export async function updateEmailLead(id, updates) {
   return data
 }
 
+// Bulk-set fields on every lead in a campaign (e.g. turn AI auto-reply on/off for all).
+export async function updateEmailLeadsByCampaign(campaignId, updates) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('email_leads')
+    .update(updates)
+    .eq('campaign_id', campaignId)
+    .select()
+  if (error) throw error
+  return data
+}
+
 export async function getEmailMessages(leadId) {
   if (isDemo()) return demo.demoEmailMessages[leadId] || []
   const { data, error } = await supabase
@@ -509,6 +521,18 @@ export async function deleteNurtureClient(id) {
     .delete()
     .eq('id', id)
   if (error) throw error
+}
+
+// Bulk-set fields on every client in a nurture campaign (e.g. turn AI auto-reply on/off).
+export async function updateNurtureClientsByCampaign(campaignId, updates) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('nurture_clients')
+    .update(updates)
+    .eq('campaign_id', campaignId)
+    .select()
+  if (error) throw error
+  return data
 }
 
 export async function getNurtureMessages(clientId) {
