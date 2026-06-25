@@ -510,11 +510,15 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
         next_send_at: next,
         emails_sent: 0,
       }))
-      await createNurtureClients(rows)
-      onDone(withEmail.length)
+      const created = await createNurtureClients(rows)
+      onDone(created.length)
+      const skipped = withEmail.length - created.length
+      if (skipped > 0) notify(`Skipped ${skipped} contact${skipped !== 1 ? 's' : ''} already enrolled in a campaign.`, 'success')
       onClose()
     } catch (e) {
-      notify('Failed to enroll: ' + e.message, 'error')
+      notify(e.code === 'DUP_ALL'
+        ? 'Those contacts are already enrolled in a campaign — a contact can only be in one campaign at a time.'
+        : 'Failed to enroll: ' + e.message, 'error')
     } finally {
       setSaving(false)
     }
@@ -744,6 +748,7 @@ function PushGroupModal({ group, members, onClose, onDone }) {
     setSaving(true)
     try {
       const now = new Date().toISOString()
+      let created
       if (isNurture) {
         const rows = withEmail.map(m => ({
           campaign_id: campaign.id,
@@ -755,7 +760,7 @@ function PushGroupModal({ group, members, onClose, onDone }) {
           next_send_at: now,
           emails_sent: 0,
         }))
-        await createNurtureClients(rows)
+        created = await createNurtureClients(rows)
       } else {
         const rows = withEmail.map(m => ({
           campaign_id: campaign.id,
@@ -768,12 +773,16 @@ function PushGroupModal({ group, members, onClose, onDone }) {
           replied: false,
           emails_sent: 0,
         }))
-        await createEmailLeads(rows)
+        created = await createEmailLeads(rows)
       }
-      onDone(withEmail.length, campaign.name)
+      onDone(created.length, campaign.name)
+      const dup = withEmail.length - created.length
+      if (dup > 0) notify(`Skipped ${dup} contact${dup !== 1 ? 's' : ''} already enrolled in a campaign.`, 'success')
       onClose()
     } catch (err) {
-      notify('Failed to push to campaign: ' + err.message, 'error')
+      notify(err.code === 'DUP_ALL'
+        ? 'Those contacts are already enrolled in a campaign — a contact can only be in one campaign at a time.'
+        : 'Failed to push to campaign: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }

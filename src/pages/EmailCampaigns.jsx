@@ -410,9 +410,15 @@ function AddLeadsModal({ campaignId, aiDefault = true, sendStartHour = 0, sendEn
       }))
       const created = await createEmailLeads(rows)
       onAdded(created)
+      const skipped = staged.length - created.length
+      notify(skipped > 0
+        ? `Added ${created.length} lead${created.length !== 1 ? 's' : ''}. Skipped ${skipped} already enrolled in a campaign.`
+        : `Added ${created.length} lead${created.length !== 1 ? 's' : ''}.`, 'success')
       onClose()
     } catch (err) {
-      notify('Failed to add leads: ' + err.message, 'error')
+      notify(err.code === 'DUP_ALL'
+        ? 'Those contacts are already enrolled in a campaign — a contact can only be in one campaign at a time.'
+        : 'Failed to add leads: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }

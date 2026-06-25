@@ -404,11 +404,50 @@ export async function getEmailLeads(campaignId) {
   return data
 }
 
+// A contact may belong to only ONE campaign at a time. Returns the set of
+// lowercased emails (from this list) that are already enrolled in any outreach
+// lead OR nurture client, so duplicate enrollment can be blocked.
+export async function enrolledEmailSet(emails) {
+  if (isDemo()) return new Set()
+  const list = [...new Set((emails || []).map(e => (e || '').trim().toLowerCase()).filter(Boolean))]
+  if (list.length === 0) return new Set()
+  const [a, b] = await Promise.all([
+    supabase.from('email_leads').select('email').in('email', list),
+    supabase.from('nurture_clients').select('email').in('email', list),
+  ])
+  if (a.error) throw a.error
+  if (b.error) throw b.error
+  const set = new Set()
+  for (const r of [...(a.data || []), ...(b.data || [])]) set.add((r.email || '').trim().toLowerCase())
+  return set
+}
+
+// Keep only rows whose (lowercased) email isn't already enrolled and isn't a
+// duplicate within this batch. Throws DUP_ALL if nothing is left to insert.
+async function dedupeForEnrollment(rows) {
+  const taken = await enrolledEmailSet(rows.map(r => r.email))
+  const seen = new Set()
+  const fresh = []
+  for (const r of rows) {
+    const e = (r.email || '').trim().toLowerCase()
+    if (!e || taken.has(e) || seen.has(e)) continue
+    seen.add(e)
+    fresh.push({ ...r, email: e })
+  }
+  if (fresh.length === 0) {
+    const err = new Error('Every email is already enrolled in a campaign. A contact can only be in one campaign at a time.')
+    err.code = 'DUP_ALL'
+    throw err
+  }
+  return fresh
+}
+
 export async function createEmailLeads(leads) {
   blockIfDemo()
+  const fresh = await dedupeForEnrollment(leads)
   const { data, error } = await supabase
     .from('email_leads')
-    .insert(leads)
+    .insert(fresh)
     .select()
   if (error) throw error
   return data
@@ -494,9 +533,10 @@ export async function getNurtureClients(campaignId) {
 
 export async function createNurtureClients(clients) {
   blockIfDemo()
+  const fresh = await dedupeForEnrollment(clients)
   const { data, error } = await supabase
     .from('nurture_clients')
-    .insert(clients)
+    .insert(fresh)
     .select()
   if (error) throw error
   return data
