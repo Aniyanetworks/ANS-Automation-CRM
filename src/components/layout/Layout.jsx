@@ -7,7 +7,18 @@ import { useAuth } from '../../context/AuthContext'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebarCollapsed') === '1' } catch { return false }
+  })
   const { isDemo } = useAuth()
+
+  function toggleCollapse() {
+    setCollapsed(c => {
+      const next = !c
+      try { localStorage.setItem('sidebarCollapsed', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
@@ -17,9 +28,9 @@ export default function Layout() {
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <Header onMenuToggle={() => setSidebarOpen(o => !o)} />
+        <Header onMenuToggle={() => setSidebarOpen(o => !o)} onToggleCollapse={toggleCollapse} />
         {isDemo && (
           <div className="flex items-center justify-center gap-2 bg-amber-500 text-white text-xs md:text-sm font-medium px-4 py-1.5 flex-shrink-0">
             <Eye size={14} />

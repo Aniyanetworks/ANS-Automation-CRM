@@ -49,6 +49,7 @@ export default function App() {
         <Route path="pipelines"   element={<Pipelines />} />
         <Route path="automations" element={<Automations />} />
         <Route path="email-campaigns" element={<EmailCampaigns />} />
+        <Route path="email-campaigns/:id" element={<EmailCampaigns />} />
         <Route path="email-report" element={<EmailReport />} />
         <Route path="review-campaigns" element={<ReviewCampaigns />} />
       </Route>

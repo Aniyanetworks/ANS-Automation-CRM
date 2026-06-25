@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Mail, Plus, X, Loader2, Trash2, Users, Send, ChevronRight,
   Clock, CheckCircle, MessageSquareReply, Pause, Play, Sparkles, Save, Upload, Heart,
   Bold, Italic, Underline, List, ListOrdered, Link2, Eraser,
-  ArrowDownLeft, ArrowUpRight, Inbox,
+  ArrowDownLeft, ArrowUpRight, Inbox, Search, ArrowLeft, Reply,
 } from 'lucide-react'
 import {
   getEmailCampaigns, createEmailCampaign, updateEmailCampaign, deleteEmailCampaign,
@@ -24,6 +25,21 @@ const leadStatusColors = {
   Completed: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
   Unsubscribed: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
   Error: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+}
+
+const AVATAR_GRADIENTS = [
+  'from-blue-500 to-indigo-600', 'from-rose-500 to-pink-600', 'from-emerald-500 to-teal-600',
+  'from-amber-500 to-orange-600', 'from-violet-500 to-purple-600', 'from-cyan-500 to-blue-600',
+  'from-fuchsia-500 to-pink-600', 'from-lime-500 to-emerald-600',
+]
+
+// Deterministic avatar (gradient + initials) from a name/email string.
+function avatarOf(str) {
+  const s = (str || '?').trim()
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  const init = s.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
+  return { g: AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length], init }
 }
 
 const DEFAULT_PROMPT = `You are a helpful sales assistant for Aniya Network Solutions. A lead has replied to our outreach email. Reply warmly and professionally, answer their question, and gently steer toward booking a call. Keep it short (2-4 sentences).`
@@ -178,10 +194,17 @@ function CampaignModal({ onClose, onCreate }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 dark:text-white">New Email Campaign</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-            <X size={18} className="text-slate-500 dark:text-slate-400" />
+        <div className="relative px-6 py-5 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-between overflow-hidden">
+          <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10" />
+          <div className="relative flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-white"><Mail size={20} /></span>
+            <div>
+              <h3 className="font-bold text-white">New Email Campaign</h3>
+              <p className="text-xs text-blue-100/90">Set up outreach or a client nurture sequence</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="relative p-1.5 hover:bg-white/20 rounded-lg transition-colors">
+            <X size={18} className="text-white" />
           </button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
@@ -574,25 +597,29 @@ function StepRow({ step, index, onSave, onDelete }) {
   const isFirst = index === 0
 
   return (
-    <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-3 bg-white dark:bg-slate-800/50">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold font-mono ${isFirst ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'}`}>
+    <div className="relative border border-slate-200 dark:border-slate-700 rounded-2xl p-4 pl-5 space-y-3 bg-white dark:bg-slate-800/50 shadow-sm">
+      <span className={`absolute left-0 top-4 bottom-4 w-1 rounded-r ${isFirst ? 'bg-blue-500' : 'bg-purple-500'}`} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${isFirst ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-purple-500 to-fuchsia-600'}`}>
+            {index + 1}
+          </span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide ${isFirst ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'}`}>
             {isFirst ? 'FIRST EMAIL' : `FOLLOW-UP ${index}`}
           </span>
           {!isFirst && (
-            <span className="flex items-center gap-1 text-xs text-slate-400">
+            <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
               <Clock size={11} /> wait
               <input
                 type="number" min="0"
                 value={form.delay_days}
                 onChange={e => setForm(f => ({ ...f, delay_days: e.target.value }))}
-                className="w-14 px-1.5 py-0.5 text-xs text-center border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                className="w-14 px-1.5 py-1 text-xs text-center border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <select
                 value={form.delay_unit}
                 onChange={e => setForm(f => ({ ...f, delay_unit: e.target.value }))}
-                className="px-1.5 py-0.5 text-xs border border-slate-200 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                className="px-1.5 py-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="minutes">minutes</option>
                 <option value="hours">hours</option>
@@ -602,7 +629,7 @@ function StepRow({ step, index, onSave, onDelete }) {
             </span>
           )}
         </div>
-        <button onClick={() => onDelete(step.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+        <button onClick={() => onDelete(step.id)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex-shrink-0">
           <Trash2 size={14} />
         </button>
       </div>
@@ -742,40 +769,55 @@ function NurtureDetail({ campaign, onUpdated }) {
       />
       {convoClient && <LeadConversationModal lead={convoClient} fetchMessages={getNurtureMessages} kind="nurture" onClose={() => setConvoClient(null)} />}
 
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Heart size={18} className="text-rose-500" /> {campaign.name}
-          </h2>
-          <p className="text-sm text-slate-400 mt-0.5">Client relationship nurture · every {campaign.interval_days ?? 30} {campaign.interval_unit || 'days'} · {campaign.from_name || 'no sender name'}</p>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 p-5 sm:p-6 shadow-md">
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/10" />
+        <div className="absolute -right-16 bottom-0 w-48 h-48 rounded-full bg-white/5" />
+        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-white flex-shrink-0"><Heart size={22} /></div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-white truncate">{campaign.name}</h2>
+              <p className="text-sm text-rose-100/90 mt-0.5 truncate">Client nurture · every {campaign.interval_days ?? 30} {campaign.interval_unit || 'days'} · {campaign.from_name || 'no sender name'}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white">
+                  <span className={`w-1.5 h-1.5 rounded-full ${campaign.status === 'Active' ? 'bg-emerald-300' : 'bg-amber-300'}`} />{campaign.status}
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white">Nurture</span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={toggleCampaign}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-colors shadow-sm bg-white hover:bg-white/90 text-rose-700"
+          >
+            {campaign.status === 'Active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+          </button>
         </div>
-        <button
-          onClick={toggleCampaign}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${campaign.status === 'Active' ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300'}`}
-        >
-          {campaign.status === 'Active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
-        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">{clients.length}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Clients</div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">{active}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Active</div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-slate-700 dark:text-slate-300">{totalSent}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Check-ins Sent</div>
-        </div>
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        {[
+          { label: 'Clients', value: clients.length, icon: Users, color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-700' },
+          { label: 'Active', value: active, icon: Heart, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-900/30' },
+          { label: 'Check-ins Sent', value: totalSent, icon: Send, color: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-100 dark:bg-slate-700' },
+        ].map(s => (
+          <div key={s.label} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${s.bg} ${s.color}`}><s.icon size={18} /></div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white leading-none">{s.value}</div>
+              <div className="text-xs text-slate-400 mt-1 truncate">{s.label}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Settings */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Sparkles size={15} className="text-violet-500" /> Check-in Settings</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center"><Sparkles size={16} /></span>
+            Check-in Settings
+          </h3>
           <button onClick={saveSettings} disabled={!settingsDirty || savingSettings} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors">
             {savingSettings ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
           </button>
@@ -834,21 +876,27 @@ function NurtureDetail({ campaign, onUpdated }) {
       {/* Clients */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Users size={15} className="text-rose-500" /> Enrolled Clients</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 flex items-center justify-center"><Users size={16} /></span>
+            Enrolled Clients
+          </h3>
           <span className="text-xs text-slate-400">Add from the Contacts page → select → “Add to Nurture”</span>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 size={22} className="animate-spin mr-2" /> Loading...</div>
           ) : clients.length === 0 ? (
-            <div className="py-10 text-center text-slate-400 text-sm">No clients enrolled yet. Add them from the Contacts page.</div>
+            <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-sm"><Users size={26} className="opacity-30 mb-2" />No clients enrolled yet. Add them from the Contacts page.</div>
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-[32rem] overflow-y-auto">
-              {clients.map(c => (
-                <div key={c.id} onClick={() => setConvoClient(c)} title="View conversation" className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer group">
+              {clients.map(c => {
+                const av = avatarOf(c.name || c.email)
+                return (
+                <div key={c.id} onClick={() => setConvoClient(c)} title="View conversation" className="px-3.5 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer group">
+                  <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${av.g} text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0`}>{av.init}</div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name || c.email}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{c.name || c.email}</span>
                       <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${c.status === 'Active' ? 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{c.status}</span>
                       <span title="AI auto-reply" className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-0.5 ${c.ai_reply_enabled === false ? 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300' : 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'}`}>
                         <Sparkles size={9} /> AI {c.ai_reply_enabled === false ? 'off' : 'on'}
@@ -870,7 +918,8 @@ function NurtureDetail({ campaign, onUpdated }) {
                     <Trash2 size={13} />
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -1181,47 +1230,59 @@ function CampaignDetail({ campaign, onUpdated }) {
         onCancel={() => setConfirmLead(null)}
       />
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{campaign.name}</h2>
-          <p className="text-sm text-slate-400 mt-0.5">
-            {campaign.from_name || 'No sender name'} {campaign.from_email ? `· ${campaign.from_email}` : ''}
-          </p>
+      {/* Hero header */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-5 sm:p-6 shadow-md">
+        <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/10" />
+        <div className="absolute -right-16 bottom-0 w-48 h-48 rounded-full bg-white/5" />
+        <div className="relative flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center text-white flex-shrink-0"><Send size={22} /></div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-white truncate">{campaign.name}</h2>
+              <p className="text-sm text-blue-100/90 mt-0.5 truncate">{campaign.from_name || 'No sender name'}{campaign.from_email ? ` · ${campaign.from_email}` : ''}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white">
+                  <span className={`w-1.5 h-1.5 rounded-full ${campaign.status === 'Active' ? 'bg-emerald-300' : 'bg-amber-300'}`} />{campaign.status}
+                </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white">Outreach</span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={toggleStatus}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-colors shadow-sm ${campaign.status === 'Active' ? 'bg-white/90 text-amber-700 hover:bg-white' : 'bg-white text-emerald-700 hover:bg-white'}`}
+          >
+            {campaign.status === 'Active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
+          </button>
         </div>
-        <button
-          onClick={toggleStatus}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${campaign.status === 'Active' ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300'}`}
-        >
-          {campaign.status === 'Active' ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Resume</>}
-        </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">{leads.length}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Total Leads</div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{active}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Active in Sequence</div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{replied}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Replied</div>
-        </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4">
-          <div className="text-2xl font-bold text-slate-500 dark:text-slate-300">{completed}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Completed</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {[
+          { label: 'Total Leads', value: leads.length, icon: Users, color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-700' },
+          { label: 'Active in Sequence', value: active, icon: Send, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30' },
+          { label: 'Replied', value: replied, icon: Reply, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
+          { label: 'Completed', value: completed, icon: CheckCircle, color: 'text-slate-500 dark:text-slate-300', bg: 'bg-slate-100 dark:bg-slate-700' },
+        ].map(s => (
+          <div key={s.label} className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${s.bg} ${s.color}`}><s.icon size={18} /></div>
+            <div className="min-w-0">
+              <div className="text-2xl font-bold text-slate-900 dark:text-white leading-none">{s.value}</div>
+              <div className="text-xs text-slate-400 mt-1 truncate">{s.label}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Sending Schedule */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-3">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Clock size={15} className="text-blue-500" /> Sending Schedule</h3>
-          <button onClick={saveSchedule} disabled={!schedDirty || savingSched} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors">
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center"><Clock size={16} /></span>
+            Sending Schedule
+          </h3>
+          <button onClick={saveSchedule} disabled={!schedDirty || savingSched} className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors">
             {savingSched ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
           </button>
         </div>
@@ -1239,35 +1300,38 @@ function CampaignDetail({ campaign, onUpdated }) {
       </div>
 
       {/* Reply & Follow-up Settings */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 space-y-4">
-        <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2"><Sparkles size={15} className="text-violet-500" /> Reply &amp; Follow-up Settings</h3>
-        <div className="flex items-center justify-between gap-3">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-3">
+        <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2.5">
+          <span className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 flex items-center justify-center"><Sparkles size={16} /></span>
+          Reply &amp; Follow-up Settings
+        </h3>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3.5">
           <div>
-            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">AI auto-reply for all leads</div>
-            <p className="text-xs text-slate-400">Turn the AI auto-reply on or off for every lead in this campaign at once.</p>
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">AI auto-reply for all leads</div>
+            <p className="text-xs text-slate-400 mt-0.5">Turn the AI auto-reply on or off for every lead in this campaign at once.</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {applyingAi && <Loader2 size={13} className="animate-spin text-slate-400" />}
             <Toggle checked={campaign.ai_reply_enabled !== false} disabled={applyingAi} onChange={setAiForAll} />
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-700 pt-4">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3.5">
           <div>
-            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Reply delay</div>
-            <p className="text-xs text-slate-400">How long the AI waits before sending its reply (0 = instant).</p>
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Reply delay</div>
+            <p className="text-xs text-slate-400 mt-0.5">How long the AI waits before sending its reply (0 = instant).</p>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <input type="number" min="0" value={replyDelay} onChange={e => setReplyDelay(e.target.value)} className={`${inputCls} w-20`} />
             <span className="text-xs text-slate-400">min</span>
-            <button onClick={saveReplyDelay} disabled={!replyDelayDirty || savingReply} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors">
+            <button onClick={saveReplyDelay} disabled={!replyDelayDirty || savingReply} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-semibold rounded-lg transition-colors">
               {savingReply ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Save
             </button>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-700 pt-4">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-700/60 p-3.5">
           <div>
-            <div className="text-sm font-medium text-slate-700 dark:text-slate-200">Automatic follow-ups</div>
-            <p className="text-xs text-slate-400">Send the follow-up sequence automatically until the lead replies. Off = first email only.</p>
+            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">Automatic follow-ups</div>
+            <p className="text-xs text-slate-400 mt-0.5">Send the follow-up sequence automatically until the lead replies. Off = first email only.</p>
           </div>
           <Toggle checked={campaign.auto_followup_enabled !== false} onChange={toggleAutoFollowup} />
         </div>
@@ -1282,10 +1346,11 @@ function CampaignDetail({ campaign, onUpdated }) {
           {/* Sequence */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                <Send size={15} className="text-blue-500" /> Email Sequence
+              <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center"><Send size={16} /></span>
+                Email Sequence
               </h3>
-              <button onClick={addStep} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+              <button onClick={addStep} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                 <Plus size={13} /> Add {steps.length === 0 ? 'First Email' : 'Follow-up'}
               </button>
             </div>
@@ -1303,10 +1368,11 @@ function CampaignDetail({ campaign, onUpdated }) {
           {/* Leads */}
           <div className="space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2">
-                <Users size={15} className="text-blue-500" /> Leads
+              <h3 className="font-semibold text-slate-900 dark:text-white text-sm flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center"><Users size={16} /></span>
+                Leads
               </h3>
-              <button onClick={() => setAddingLeads(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+              <button onClick={() => setAddingLeads(true)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
                 <Plus size={13} /> Add Leads
               </button>
             </div>
@@ -1320,16 +1386,22 @@ function CampaignDetail({ campaign, onUpdated }) {
                 )
               })}
             </div>
-            <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               {filteredLeads.length === 0 ? (
-                <div className="py-10 text-center text-slate-400 text-sm">{leads.length === 0 ? 'No leads enrolled yet.' : 'No leads in this view.'}</div>
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400 text-sm">
+                  <Users size={26} className="opacity-30 mb-2" />
+                  {leads.length === 0 ? 'No leads enrolled yet.' : 'No leads in this view.'}
+                </div>
               ) : (
                 <div className="divide-y divide-slate-50 dark:divide-slate-700 max-h-[32rem] overflow-y-auto">
-                  {filteredLeads.map(l => (
-                    <div key={l.id} onClick={() => setConvoLead(l)} title="View conversation" className="px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer group">
+                  {filteredLeads.map(l => {
+                    const av = avatarOf(l.name || l.email)
+                    return (
+                    <div key={l.id} onClick={() => setConvoLead(l)} title="View conversation" className="px-3.5 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors cursor-pointer group">
+                      <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${av.g} text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0`}>{av.init}</div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-slate-900 dark:text-white truncate">{l.name || l.email}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{l.name || l.email}</span>
                           <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${leadStatusColors[l.status] || 'bg-slate-100 text-slate-600'}`}>
                             {l.replied && <MessageSquareReply size={9} className="inline mr-0.5 -mt-0.5" />}
                             {l.status}
@@ -1357,7 +1429,8 @@ function CampaignDetail({ campaign, onUpdated }) {
                         <Trash2 size={13} />
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -1387,38 +1460,44 @@ function CampaignDetail({ campaign, onUpdated }) {
 export default function EmailCampaigns() {
   const notify = useNotify()
   const { isDemo } = useAuth()
+  const navigate = useNavigate()
+  const { id } = useParams()
   const [campaigns, setCampaigns] = useState([])
-  const [selected, setSelected] = useState(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [confirmCampaign, setConfirmCampaign] = useState(null)
+  const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState('all')
+
+  // The selected campaign is derived from the URL, so refreshing /email-campaigns/:id
+  // restores exactly the same view instead of bouncing to the first campaign.
+  const selected = id ? campaigns.find(c => c.id === id) || null : null
 
   useEffect(() => {
     getEmailCampaigns()
-      .then(data => {
-        setCampaigns(data)
-        if (data.length) setSelected(data[0])
-      })
+      .then(setCampaigns)
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
+  function open(c) { navigate(`/email-campaigns/${c.id}`) }
+
   function handleCreate(created) {
     setCampaigns(prev => [created, ...prev])
-    setSelected(created)
+    navigate(`/email-campaigns/${created.id}`)
   }
 
   function handleUpdated(updated) {
     setCampaigns(prev => prev.map(c => c.id === updated.id ? updated : c))
-    setSelected(s => s && s.id === updated.id ? updated : s)
   }
 
   async function removeCampaign() {
     if (!confirmCampaign) return
     try {
+      const wasSelected = selected?.id === confirmCampaign.id
       await deleteEmailCampaign(confirmCampaign.id)
       setCampaigns(prev => prev.filter(c => c.id !== confirmCampaign.id))
-      setSelected(s => s && s.id === confirmCampaign.id ? null : s)
+      if (wasSelected) navigate('/email-campaigns')
     } catch (e) {
       notify('Failed to delete: ' + e.message, 'error')
     } finally {
@@ -1426,14 +1505,24 @@ export default function EmailCampaigns() {
     }
   }
 
+  const outreachCount = campaigns.filter(c => c.type !== 'nurture').length
+  const nurtureCount = campaigns.filter(c => c.type === 'nurture').length
+  const activeCount = campaigns.filter(c => c.status === 'Active').length
+  const visible = campaigns.filter(c =>
+    (filter === 'all' || (filter === 'nurture' ? c.type === 'nurture' : c.type !== 'nurture')) &&
+    (!query.trim() || (c.name || '').toLowerCase().includes(query.trim().toLowerCase()))
+  )
+
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-slate-400">
       <Loader2 size={28} className="animate-spin mr-2" /> Loading campaigns...
     </div>
   )
 
+  const filters = [['all', 'All', campaigns.length], ['outreach', 'Outreach', outreachCount], ['nurture', 'Nurture', nurtureCount]]
+
   return (
-    <div className="flex flex-col lg:flex-row gap-5">
+    <div className="space-y-5">
       <ConfirmDialog
         open={!!confirmCampaign}
         title="Delete Campaign"
@@ -1443,59 +1532,119 @@ export default function EmailCampaigns() {
         onCancel={() => setConfirmCampaign(null)}
       />
 
-      {/* Campaign list */}
-      <div className="lg:w-72 flex-shrink-0 space-y-3">
+      {/* Page header */}
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-sm"><Mail size={18} /></span>
+            Email Campaigns
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">{campaigns.length} campaign{campaigns.length !== 1 ? 's' : ''} · {activeCount} active · AI-assisted replies & follow-ups</p>
+        </div>
         {!isDemo && (
           <button
             onClick={() => setCreating(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-br from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm hover:shadow-md"
           >
-            <Plus size={15} /> New Campaign
+            <Plus size={16} /> New Campaign
           </button>
         )}
-        <div className="space-y-1.5">
-          {campaigns.length === 0 ? (
-            <div className="text-center text-slate-400 text-sm py-8">No campaigns yet.</div>
-          ) : campaigns.map(c => (
-            <button
-              key={c.id}
-              onClick={() => setSelected(c)}
-              className={`w-full text-left px-4 py-3 rounded-xl border transition-colors group ${selected?.id === c.id ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${c.type === 'nurture' ? (c.status === 'Active' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400') : (c.status === 'Active' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-400')}`}>
-                    {c.type === 'nurture' ? <Heart size={15} /> : <Mail size={15} />}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white truncate">{c.name}</div>
-                    <div className="text-xs text-slate-400">{c.type === 'nurture' ? 'Nurture' : 'Outreach'} · {c.status}</div>
-                  </div>
-                </div>
-                <span
-                  onClick={e => { e.stopPropagation(); setConfirmCampaign(c) }}
-                  className="p-1 rounded text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                >
-                  <Trash2 size={13} />
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Detail */}
-      <div className="flex-1 min-w-0">
-        {selected ? (
-          selected.type === 'nurture'
-            ? <NurtureDetail campaign={selected} onUpdated={handleUpdated} />
-            : <CampaignDetail campaign={selected} onUpdated={handleUpdated} />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
-            <Mail size={32} className="opacity-30 mb-2" />
-            <p className="text-sm">Select or create a campaign to get started</p>
+      <div className="flex flex-col lg:flex-row gap-5">
+        {/* Sidebar list */}
+        <aside className={`lg:w-80 flex-shrink-0 space-y-3 ${selected ? 'hidden lg:block' : 'block'}`}>
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search campaigns…"
+              className="w-full pl-9 pr-3 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-        )}
+          <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+            {filters.map(([key, label, count]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors ${filter === key ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+              >
+                {label} <span className="opacity-60">{count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="space-y-2 lg:max-h-[calc(100vh-16rem)] lg:overflow-y-auto pr-0.5">
+            {visible.length === 0 ? (
+              <div className="text-center text-slate-400 text-sm py-10 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl">
+                {campaigns.length === 0 ? 'No campaigns yet.' : 'No matches.'}
+              </div>
+            ) : visible.map(c => {
+              const nurture = c.type === 'nurture'
+              const active = selected?.id === c.id
+              const live = c.status === 'Active'
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => open(c)}
+                  className={`group relative w-full text-left rounded-2xl border p-3.5 transition-all cursor-pointer overflow-hidden ${active ? 'border-transparent ring-2 ring-blue-500/40 bg-blue-50/70 dark:bg-blue-900/20 shadow-sm' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm'}`}
+                >
+                  {active && <span className={`absolute left-0 top-0 bottom-0 w-1 ${nurture ? 'bg-rose-500' : 'bg-blue-500'}`} />}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm ${nurture ? 'bg-gradient-to-br from-rose-500 to-pink-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'}`}>
+                      {nurture ? <Heart size={17} /> : <Send size={17} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white truncate">{c.name}</div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${nurture ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300' : 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300'}`}>{nurture ? 'Nurture' : 'Outreach'}</span>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${live ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${live ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />{c.status}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className={`flex-shrink-0 transition-colors ${active ? 'text-blue-500' : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-400'}`} />
+                  </div>
+                  {!isDemo && (
+                    <span
+                      onClick={e => { e.stopPropagation(); setConfirmCampaign(c) }}
+                      title="Delete campaign"
+                      className="absolute top-2 right-2 p-1 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </aside>
+
+        {/* Detail */}
+        <main className={`flex-1 min-w-0 ${selected ? 'block' : 'hidden lg:block'}`}>
+          {selected ? (
+            <>
+              <button onClick={() => navigate('/email-campaigns')} className="lg:hidden flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mb-3 hover:text-slate-700 dark:hover:text-slate-200">
+                <ArrowLeft size={15} /> All campaigns
+              </button>
+              {selected.type === 'nurture'
+                ? <NurtureDetail campaign={selected} onUpdated={handleUpdated} />
+                : <CampaignDetail campaign={selected} onUpdated={handleUpdated} />}
+            </>
+          ) : id ? (
+            <div className="flex flex-col items-center justify-center h-72 text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl">
+              <Mail size={34} className="opacity-30 mb-2" />
+              <p className="text-sm">Campaign not found.</p>
+              <button onClick={() => navigate('/email-campaigns')} className="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline">Back to campaigns</button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-72 text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-slate-50/50 dark:bg-slate-800/30">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-sm mb-3"><Mail size={26} /></div>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Select a campaign</p>
+              <p className="text-xs mt-0.5">Pick one from the list{!isDemo ? ' or create a new campaign' : ''}.</p>
+            </div>
+          )}
+        </main>
       </div>
 
       {creating && <CampaignModal onClose={() => setCreating(false)} onCreate={handleCreate} />}

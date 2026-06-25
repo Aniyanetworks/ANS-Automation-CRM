@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Bell, Search, Plus, Menu, Sun, Moon, LogOut, KeyRound, ChevronDown } from 'lucide-react'
+import { Bell, Search, Plus, Menu, Sun, Moon, LogOut, KeyRound, ChevronDown, PanelLeft } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTheme } from '../../context/ThemeContext'
 import { useAuth } from '../../context/AuthContext'
@@ -45,7 +45,7 @@ function getInitials(name) {
   return name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
 }
 
-export default function Header({ onMenuToggle }) {
+export default function Header({ onMenuToggle, onToggleCollapse }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { isDark, toggleTheme } = useTheme()
@@ -124,8 +124,16 @@ export default function Header({ onMenuToggle }) {
           <button
             onClick={onMenuToggle}
             className="md:hidden p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            title="Open menu"
           >
             <Menu size={20} />
+          </button>
+          <button
+            onClick={onToggleCollapse}
+            className="hidden md:flex p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+            title="Toggle sidebar"
+          >
+            <PanelLeft size={20} />
           </button>
           <div>
             <h1 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white leading-tight">{title}</h1>
