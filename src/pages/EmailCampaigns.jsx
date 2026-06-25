@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Mail, Plus, X, Loader2, Trash2, Users, Send, ChevronRight,
@@ -936,6 +936,49 @@ function fmtDateTime(ts) {
   return new Date(ts).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) + ' EST'
 }
 
+// Short time + day-separator labels for the chat view (EST).
+function fmtTime(ts) {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Toronto' })
+}
+function dayLabel(ts) {
+  if (!ts) return ''
+  const tz = 'America/Toronto'
+  const key = d => d.toLocaleDateString('en-CA', { timeZone: tz })
+  const d = new Date(ts), now = new Date(), yest = new Date(now.getTime() - 86400000)
+  if (key(d) === key(now)) return 'Today'
+  if (key(d) === key(yest)) return 'Yesterday'
+  return new Date(ts).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: tz })
+}
+
+// Keep only the person's actual new message: cut off the quoted reply chain
+// (lines starting with ">"), the Gmail "On … wrote:" attribution (which often wraps
+// onto two lines), and Outlook "From:/Sent:" headers — then collapse blank-line runs.
+function cleanInboundBody(raw) {
+  const t = String(raw || '').replace(/\r/g, '')
+  const lines = t.split('\n')
+  let cut = lines.length
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i]
+    if (/^\s*>/.test(ln)) { cut = i; break }                              // quoted text
+    if (/^\s*On\b/.test(ln)) {                                            // "On <date> <name> … wrote:"
+      const probe = `${ln} ${lines[i + 1] || ''} ${lines[i + 2] || ''}`
+      if (/\bwrote:/.test(probe)) { cut = i; break }
+    }
+    if (/^\s*-{2,}\s*Original Message/i.test(ln)) { cut = i; break }      // Outlook divider
+    if (/^\s*From:\s.+/.test(ln) && /@/.test(lines.slice(i, i + 4).join(' '))) { cut = i; break }
+  }
+  let result = lines.slice(0, cut).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  if (result) return result
+  // Whole message was quoted — de-quote it and collapse blank lines.
+  return lines.map(l => l.replace(/^\s*>+\s?/, '')).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+// Tidy our own outbound HTML: collapse long runs of <br> so signatures don't sprawl.
+function cleanOutboundHtml(html) {
+  return String(html || '').replace(/(\s*<br\s*\/?>\s*){3,}/gi, '<br><br>')
+}
+
 function LeadConversationModal({ lead, onClose, fetchMessages = getEmailMessages, kind = 'email' }) {
   const notify = useNotify()
   const { isDemo } = useAuth()
@@ -987,25 +1030,28 @@ function LeadConversationModal({ lead, onClose, fetchMessages = getEmailMessages
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[88vh]">
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-          <div className="min-w-0">
-            <h3 className="font-semibold text-slate-900 dark:text-white truncate">{lead.name || lead.email}</h3>
-            <p className="text-xs text-slate-400 truncate">{lead.email}</p>
+        {/* Chat header (WhatsApp-style) */}
+        <div className="px-4 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur text-white text-sm font-bold flex items-center justify-center flex-shrink-0">
+            {avatarOf(lead.name || lead.email).init}
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${leadStatusColors[lead.status] || 'bg-slate-100 text-slate-600'}`}>
-              {lead.replied && <MessageSquareReply size={9} className="inline mr-0.5 -mt-0.5" />}{lead.status}
-            </span>
-            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-white truncate leading-tight">{lead.name || lead.email}</h3>
+            <p className="text-xs text-emerald-50/80 truncate">{lead.email}</p>
           </div>
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/20 text-white flex items-center gap-1">
+            {lead.replied && <MessageSquareReply size={10} />}{lead.status}
+          </span>
+          <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"><X size={18} className="text-white" /></button>
         </div>
 
         {/* AI auto-reply toggle */}
-        <div className="px-6 py-2.5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3">
+        <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between gap-3 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-2 text-sm">
             <Sparkles size={14} className={aiOn ? 'text-violet-500' : 'text-slate-400'} />
             <span className="text-slate-700 dark:text-slate-200">AI auto-reply</span>
             <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${aiOn ? 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300'}`}>{aiOn ? 'On' : 'Off'}</span>
+            <span className="hidden sm:inline text-xs text-slate-400">· {lead.emails_sent || 0} sent · last {fmtDateTime(lead.last_sent_at)}</span>
           </div>
           {!isDemo && (
             <button onClick={toggleAi} disabled={togglingAi} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${aiOn ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-violet-600 hover:bg-violet-700 text-white'}`}>
@@ -1015,34 +1061,36 @@ function LeadConversationModal({ lead, onClose, fetchMessages = getEmailMessages
           )}
         </div>
 
-        <div className="px-6 py-2 border-b border-slate-100 dark:border-slate-700 grid grid-cols-3 gap-2 text-xs">
-          <div><span className="text-slate-400">Emails sent</span><div className="font-medium text-slate-700 dark:text-slate-200">{lead.emails_sent || 0}</div></div>
-          <div><span className="text-slate-400">Last sent</span><div className="font-medium text-slate-700 dark:text-slate-200">{fmtDateTime(lead.last_sent_at)}</div></div>
-          <div><span className="text-slate-400">Next send</span><div className="font-medium text-slate-700 dark:text-slate-200">{lead.status === 'Active' ? fmtDateTime(lead.next_send_at) : '—'}</div></div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 dark:bg-slate-800/40">
+        {/* Chat thread */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 bg-[#efeae2] dark:bg-slate-900/70">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 size={20} className="animate-spin mr-2" /> Loading...</div>
           ) : messages.length === 0 ? (
-            <div className="py-10 text-center text-slate-400 text-sm"><Inbox size={28} className="mx-auto mb-2 opacity-40" />No messages logged yet.</div>
+            <div className="py-10 text-center text-slate-400 text-sm"><Inbox size={28} className="mx-auto mb-2 opacity-40" />No messages yet.</div>
           ) : (
-            messages.map(m => {
+            messages.map((m, i) => {
               const inbound = m.direction === 'inbound'
+              const day = dayLabel(m.created_at)
+              const prevDay = i > 0 ? dayLabel(messages[i - 1].created_at) : null
               return (
-                <div key={m.id} className={`flex ${inbound ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${inbound ? 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700' : 'bg-blue-600 text-white'}`}>
-                    <div className={`flex items-center gap-1 text-xs mb-1 ${inbound ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-100'}`}>
-                      {inbound ? <ArrowDownLeft size={12} /> : <ArrowUpRight size={12} />}
-                      {inbound ? 'Reply received' : 'Sent'}
-                      <span className={inbound ? 'text-slate-400' : 'text-blue-200'}>· {fmtDateTime(m.created_at)}</span>
+                <Fragment key={m.id}>
+                  {day && day !== prevDay && (
+                    <div className="flex justify-center py-1.5">
+                      <span className="px-2.5 py-1 rounded-lg bg-white/80 dark:bg-slate-700/80 text-[11px] font-medium text-slate-500 dark:text-slate-300 shadow-sm">{day}</span>
                     </div>
-                    {m.subject && <div className={`text-xs font-semibold mb-1 ${inbound ? 'text-slate-700 dark:text-slate-200' : 'text-white'}`}>{m.subject}</div>}
-                    {inbound
-                      ? <div className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">{m.body}</div>
-                      : <div className="text-sm whitespace-pre-wrap break-words text-white" dangerouslySetInnerHTML={{ __html: m.body || '' }} />}
+                  )}
+                  <div className={`flex ${inbound ? 'justify-start' : 'justify-end'}`}>
+                    <div className={`relative max-w-[82%] px-3 py-2 shadow-sm text-sm leading-relaxed break-words whitespace-pre-wrap ${inbound
+                      ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-2xl rounded-tl-md'
+                      : 'bg-[#dcf8c6] dark:bg-emerald-900/50 text-slate-800 dark:text-emerald-50 rounded-2xl rounded-tr-md'}`}>
+                      {m.subject && <div className="text-[11px] font-semibold mb-0.5 opacity-70 truncate">{m.subject}</div>}
+                      {inbound
+                        ? <div>{cleanInboundBody(m.body)}</div>
+                        : <div className="[&_a]:underline [&_a]:text-blue-700 dark:[&_a]:text-blue-300" dangerouslySetInnerHTML={{ __html: cleanOutboundHtml(m.body) }} />}
+                      <div className={`text-[10px] mt-1 text-right select-none ${inbound ? 'text-slate-400' : 'text-emerald-700/70 dark:text-emerald-200/60'}`}>{fmtTime(m.created_at)}</div>
+                    </div>
                   </div>
-                </div>
+                </Fragment>
               )
             })
           )}

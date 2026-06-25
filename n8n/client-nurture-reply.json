@@ -97,7 +97,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Works whether Find Client returns the array wrapped in one item's json,\n// or split into one item per row. Only proceeds for a known nurture client.\nconst items = $input.all();\nlet client = null;\nfor (const it of items) {\n  const v = it.json;\n  if (Array.isArray(v)) { if (v.length) { client = v[0]; break; } }\n  else if (v && (v.id || v.email)) { client = v; break; }\n}\nif (!client) return [];\nreturn [{ json: client }];"
+        "jsCode": "// One output item per matched reply, so a batch of replies arriving in a single\n// poll are ALL processed (previously only the first lead was kept). pairedItem is\n// preserved so downstream $('...').item lookups resolve to the right reply.\nconst out = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const v = items[i].json;\n  let row = null;\n  if (Array.isArray(v)) { if (v.length) row = v[0]; }\n  else if (v && (v.id || v.email)) row = v;\n  if (row) out.push({ json: row, pairedItem: items[i].pairedItem != null ? items[i].pairedItem : { item: i } });\n}\nreturn out;"
       },
       "id": "a7b8c9d0-0004-4a04-9a04-000000000004",
       "name": "Pick Client",
@@ -163,9 +163,9 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ $('Extract Reply').item.json.body }}",
+        "text": "={{ $json.latest }}",
         "options": {
-          "systemMessage": "={{ 'You are replying on behalf of Aniya Network Solutions to a PAST client. Tone guidance: ' + ($('Get Campaign').item.json[0] ? $('Get Campaign').item.json[0].ai_reply_prompt : 'Warm, friendly, personal.') + '\\n\\n--- Client ---\\nName: ' + ($('Pick Client').item.json.name || '') + '\\nOur history / notes: ' + ($('Pick Client').item.json.note || '(none)') + '\\n\\n--- Full email conversation so far (oldest first) ---\\n' + $('Build Context').item.json.transcript + '\\n\\nThe user message is the client\\'s latest reply. Reply as the next message in THIS conversation, using the full history above for context. Warm and personal, NOT a sales pitch. Write ONLY the email body — no subject, and do NOT add any sign-off, closing, signature, or name (a signature is appended automatically).' }}"
+          "systemMessage": "={{ 'You are replying on behalf of Aniya Network Solutions to a PAST client. Tone guidance: ' + ($json.tone || 'Warm, friendly, personal.') + '\\n\\n--- Client ---\\nName: ' + ($json.name || '') + '\\nOur history / notes: ' + ($json.note || '(none)') + '\\n\\n--- Full email conversation so far (oldest first) ---\\n' + $json.transcript + '\\n\\nThe user message is the client\\'s latest reply. Reply as the next message in THIS conversation, using the full history above for context. Warm and personal, NOT a sales pitch. Write ONLY the email body — no subject, and do NOT add any sign-off, closing, signature, or name (a signature is appended automatically).' }}"
         }
       },
       "id": "a7b8c9d0-0006-4a06-9a06-000000000006",
@@ -206,7 +206,7 @@
     {
       "parameters": {
         "operation": "reply",
-        "messageId": "={{ $('Nurture Reply Trigger').item.json.id }}",
+        "messageId": "={{ $('Build Context').item.json.messageId }}",
         "emailType": "text",
         "message": "={{ $json.output + '\\n\\nTake care,\\nManam Parvez\\nAniya Networks Solutions Inc.' }}",
         "options": {
@@ -320,7 +320,7 @@
           "parameters": [
             {
               "name": "client_id",
-              "value": "={{ $('Pick Client').item.json.id }}"
+              "value": "={{ $('Build Context').item.json.client_id }}"
             },
             {
               "name": "direction",
@@ -328,7 +328,7 @@
             },
             {
               "name": "subject",
-              "value": "={{ 'Re: ' + $('Extract Reply').item.json.subject }}"
+              "value": "={{ 'Re: ' + $('Build Context').item.json.subject }}"
             },
             {
               "name": "body",
@@ -458,7 +458,7 @@
             },
             {
               "name": "select",
-              "value": "direction,body,created_at"
+              "value": "direction,body,created_at,client_id"
             },
             {
               "name": "order",
@@ -499,7 +499,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rows = [];\nfor (const it of $input.all()) { const v = it.json; if (Array.isArray(v)) { for (const m of v) rows.push(m); } else if (v && v.direction) { rows.push(v); } }\nconst strip = (h) => String(h || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/[ \\t\\r\\n]+/g, ' ').trim();\nconst lines = rows.map(m => (m.direction === 'inbound' ? 'Client' : 'Us') + ': ' + strip(m.body)).filter(Boolean);\nconst transcript = lines.join(String.fromCharCode(10)) || '(no prior messages)';\nreturn [{ json: { transcript } }];"
+        "jsCode": "const items = $input.all();\nconst strip = (h) => String(h || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\\s+/g, ' ').trim();\nconst byKey = new Map();\nfor (const it of items) {\n  const v = it.json;\n  const rows = Array.isArray(v) ? v : [v];\n  for (const m of rows) {\n    if (!m || !m.direction) continue;\n    const k = m.client_id || '__none__';\n    let arr = byKey.get(k); if (!arr) { arr = []; byKey.set(k, arr); }\n    arr.push(m);\n  }\n}\nconst people = $('Pick Client').all().map(i => i.json);\nconst camps = $('Get Campaign').all().map(i => i.json);\nconst replies = $('Extract Reply').all().map(i => i.json);\nconst norm = s => String(s || '').toLowerCase();\nconst out = [];\nlet idx = 0;\nfor (const [key, msgs] of byKey) {\n  const p = people.find(x => x && x.id === key) || {};\n  const camp = camps.find(c => c && c.id === p.campaign_id) || {};\n  const reply = replies.find(r => r && norm(r.fromEmail) === norm(p.email)) || {};\n  msgs.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));\n  const transcript = msgs.map(m => (m.direction === 'inbound' ? 'Client' : 'Us') + ': ' + strip(m.body)).filter(Boolean).join(String.fromCharCode(10)) || '(no prior messages)';\n  out.push({ json: { transcript, name: p.name || '', email: p.email || '', client_id: (p.id || key), note: (p.note || '(none)'), tone: (camp.ai_reply_prompt || ''), latest: reply.body || '', subject: reply.subject || '', messageId: reply.messageId || p.message_id || '' }, pairedItem: { item: idx++ } });\n}\nif (out.length === 0) out.push({ json: { transcript: '(no prior messages)', name: '', email: '', tone: '', latest: '', subject: '', messageId: '' }, pairedItem: { item: 0 } });\nreturn out;"
       },
       "id": "ctx-build-nurt-0001",
       "name": "Build Context",
