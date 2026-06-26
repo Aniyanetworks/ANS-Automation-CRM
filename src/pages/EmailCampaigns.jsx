@@ -63,7 +63,8 @@ function toggleDayCsv(csv, n) {
 
 // The next moment the campaign's sending window opens, as an ISO string.
 // Mirrors the scheduler's gate: only allowed weekdays (1=Mon..7=Sun) and the
-// [startHour, endHour) window, evaluated in America/Toronto (EST/EDT). If we're
+// hour window, evaluated in America/Toronto (EST/EDT). Supports wrap-around
+// windows where start > end (e.g. 6 PM → 5 PM = open overnight). If we're
 // already inside an open window on an allowed day, returns now (send asap).
 function nextWindowStart(startHour, endHour, daysCsv) {
   const tz = 'America/Toronto'
@@ -72,6 +73,7 @@ function nextWindowStart(startHour, endHour, daysCsv) {
   const allowed = new Set(String(daysCsv ?? '1,2,3,4,5,6,7').split(',').map(x => parseInt(x.trim(), 10)).filter(Boolean))
   const now = new Date()
   if (allowed.size === 0) return now.toISOString()
+  const isOpen = (h) => start <= end ? (h >= start && h < end) : (h >= start || h < end)
   // Convert a Toronto wall-clock (y, m[1-12], d, h) to the correct UTC instant.
   const toUtc = (y, m, d, h) => {
     const guess = Date.UTC(y, m - 1, d, h, 0, 0)
@@ -80,20 +82,20 @@ function nextWindowStart(startHour, endHour, daysCsv) {
     const asTz = Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute, +p.second)
     return new Date(guess - (asTz - guess))
   }
+  const tparts = (dt) => {
+    const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', hour12: false })
+    const p = f.formatToParts(dt).reduce((a, x) => (a[x.type] = x.value, a), {})
+    return { y: +p.year, m: +p.month, d: +p.day, hour: (+p.hour) % 24, weekday: ((new Date(Date.UTC(+p.year, +p.month - 1, +p.day)).getUTCDay() + 6) % 7) + 1 }
+  }
+  // Already inside an open window on an allowed day → send now.
+  const np = tparts(now)
+  if (allowed.has(np.weekday) && isOpen(np.hour)) return now.toISOString()
+  // Otherwise the next opening is hour=start on the next allowed day that's still ahead.
   for (let i = 0; i < 8; i++) {
-    const sample = new Date(now.getTime() + i * 86400000)
-    const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: 'numeric', day: 'numeric' })
-    const p = f.formatToParts(sample).reduce((a, x) => (a[x.type] = x.value, a), {})
-    const y = +p.year, m = +p.month, d = +p.day
-    const weekday = ((new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7) + 1 // 1=Mon..7=Sun
-    if (!allowed.has(weekday)) continue
-    const winStart = toUtc(y, m, d, start)
-    const winEnd = end >= 24 ? new Date(toUtc(y, m, d, 0).getTime() + 24 * 3600000) : toUtc(y, m, d, end)
-    if (i === 0) {
-      if (now < winEnd) return new Date(Math.max(now.getTime(), winStart.getTime())).toISOString()
-    } else {
-      return winStart.toISOString()
-    }
+    const p = tparts(new Date(now.getTime() + i * 86400000))
+    if (!allowed.has(p.weekday)) continue
+    const winStart = toUtc(p.y, p.m, p.d, start)
+    if (winStart.getTime() > now.getTime()) return winStart.toISOString()
   }
   return now.toISOString()
 }
