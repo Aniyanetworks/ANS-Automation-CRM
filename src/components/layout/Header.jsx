@@ -9,6 +9,7 @@ import ChangePasswordModal from '../ChangePasswordModal'
 const pageTitles = {
   '/dashboard': 'Dashboard',
   '/contacts': 'Contacts',
+  '/inbox': 'Inbox',
   '/chat-history': 'Chat History',
   '/followups': 'Follow-ups',
   '/email-campaigns': 'Email Campaigns',
@@ -21,6 +22,7 @@ const pageTitles = {
 const pageSubtitles = {
   '/dashboard': 'Overview of your CRM activity',
   '/contacts': 'Manage and track all your leads',
+  '/inbox': 'All email conversations across campaigns',
   '/chat-history': 'View all conversation history',
   '/followups': 'Manage scheduled follow-ups',
   '/email-campaigns': 'Schedule outreach emails and automated follow-ups',

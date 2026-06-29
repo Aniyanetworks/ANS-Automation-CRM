@@ -596,6 +596,64 @@ export async function getAllNurtureClients() {
   return data
 }
 
+// Returns all threads (leads + nurture clients with ≥1 message) sorted by latest message.
+export async function getInboxThreads() {
+  if (isDemo()) return []
+  const [leadsRes, clientsRes, campaignsRes, emailMsgsRes, nurtureMsgsRes] = await Promise.all([
+    supabase.from('email_leads').select('id, name, email, campaign_id, replied, ai_reply_enabled'),
+    supabase.from('nurture_clients').select('id, name, email, campaign_id, ai_reply_enabled'),
+    supabase.from('email_campaigns').select('id, name, type'),
+    supabase.from('email_messages').select('lead_id, direction, body, subject, created_at').order('created_at', { ascending: false }),
+    supabase.from('nurture_messages').select('client_id, direction, body, subject, created_at').order('created_at', { ascending: false }),
+  ])
+  for (const r of [leadsRes, clientsRes, campaignsRes, emailMsgsRes, nurtureMsgsRes]) {
+    if (r.error) throw r.error
+  }
+  const campMap = {}
+  for (const c of campaignsRes.data || []) campMap[c.id] = c
+  const latestEmail = {}, latestInboundEmail = {}
+  for (const m of emailMsgsRes.data || []) {
+    if (!latestEmail[m.lead_id]) latestEmail[m.lead_id] = m
+    if (m.direction === 'inbound' && !latestInboundEmail[m.lead_id]) latestInboundEmail[m.lead_id] = m
+  }
+  const latestNurture = {}, latestInboundNurture = {}
+  for (const m of nurtureMsgsRes.data || []) {
+    if (!latestNurture[m.client_id]) latestNurture[m.client_id] = m
+    if (m.direction === 'inbound' && !latestInboundNurture[m.client_id]) latestInboundNurture[m.client_id] = m
+  }
+  const threads = []
+  for (const l of leadsRes.data || []) {
+    const latest = latestEmail[l.id]
+    if (!latest) continue
+    threads.push({ id: l.id, kind: 'email', name: l.name || l.email, email: l.email, campaignId: l.campaign_id, campaign: campMap[l.campaign_id] || null, latestMessage: latest, latestInbound: latestInboundEmail[l.id] || null, aiReplyEnabled: l.ai_reply_enabled !== false })
+  }
+  for (const c of clientsRes.data || []) {
+    const latest = latestNurture[c.id]
+    if (!latest) continue
+    threads.push({ id: c.id, kind: 'nurture', name: c.name || c.email, email: c.email, campaignId: c.campaign_id, campaign: campMap[c.campaign_id] || null, latestMessage: latest, latestInbound: latestInboundNurture[c.id] || null, aiReplyEnabled: c.ai_reply_enabled !== false })
+  }
+  return threads.sort((a, b) => new Date(b.latestMessage.created_at) - new Date(a.latestMessage.created_at))
+}
+
+// Returns { [email_lowercase]: campaignName } for every enrolled email (outreach + nurture).
+export async function getContactEnrollments() {
+  if (isDemo()) return {}
+  const [leadsRes, clientsRes, campaignsRes] = await Promise.all([
+    supabase.from('email_leads').select('email, campaign_id'),
+    supabase.from('nurture_clients').select('email, campaign_id'),
+    supabase.from('email_campaigns').select('id, name'),
+  ])
+  if (leadsRes.error || clientsRes.error || campaignsRes.error) return {}
+  const campMap = {}
+  for (const c of campaignsRes.data || []) campMap[c.id] = c.name
+  const map = {}
+  for (const r of [...(leadsRes.data || []), ...(clientsRes.data || [])]) {
+    const e = (r.email || '').trim().toLowerCase()
+    if (e && r.campaign_id) map[e] = campMap[r.campaign_id] || 'Campaign'
+  }
+  return map
+}
+
 // ─── REVIEW CAMPAIGNS ────────────────────────────────────────────────────────
 
 export async function getReviewCampaigns() {

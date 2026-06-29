@@ -2,13 +2,14 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, MessageSquare, CalendarDays,
   Activity, Zap, Layers, Settings, Bot, X, LogOut, Mail, Star, BarChart3,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Inbox,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/contacts', icon: Users, label: 'Contacts' },
+  { to: '/inbox', icon: Inbox, label: 'Inbox' },
   { to: '/chat-history', icon: MessageSquare, label: 'Chat History' },
   { to: '/followups', icon: CalendarDays, label: 'Follow-ups' },
   { to: '/email-campaigns', icon: Mail, label: 'Email Campaigns' },

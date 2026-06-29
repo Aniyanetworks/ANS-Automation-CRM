@@ -15,6 +15,7 @@ import EmailCampaigns from './pages/EmailCampaigns'
 import EmailReport from './pages/EmailReport'
 import ReviewCampaigns from './pages/ReviewCampaigns'
 import ReviewForm from './pages/ReviewForm'
+import Inbox from './pages/Inbox'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="workflows"   element={<Workflows />} />
         <Route path="pipelines"   element={<Pipelines />} />
         <Route path="automations" element={<Automations />} />
+        <Route path="inbox" element={<Inbox />} />
         <Route path="email-campaigns" element={<EmailCampaigns />} />
         <Route path="email-campaigns/:id" element={<EmailCampaigns />} />
         <Route path="email-report" element={<EmailReport />} />

@@ -7,6 +7,7 @@ import {
   getContactGroups, getGroupMemberships, createContactGroup, deleteContactGroup, addContactsToGroup,
   getEmailCampaigns, createEmailLeads,
   getReviewCampaigns, createReviewLeads,
+  getContactEnrollments,
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
@@ -564,6 +565,99 @@ function NurtureEnrollModal({ contacts, onClose, onDone }) {
   )
 }
 
+function OutreachEnrollModal({ contacts, onClose, onDone }) {
+  const notify = useNotify()
+  const [campaigns, setCampaigns] = useState([])
+  const [campaignId, setCampaignId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    getEmailCampaigns()
+      .then(all => {
+        const outreach = all.filter(c => (c.type || 'outreach') !== 'nurture')
+        setCampaigns(outreach)
+        if (outreach.length) setCampaignId(outreach[0].id)
+      })
+      .catch(e => notify('Failed to load campaigns: ' + e.message, 'error'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const withEmail = contacts.filter(c => c.email && c.email.trim())
+  const skipped = contacts.length - withEmail.length
+  const campaign = campaigns.find(c => c.id === campaignId)
+  const inputCls2 = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+
+  async function submit() {
+    if (!campaign || withEmail.length === 0) return
+    setSaving(true)
+    try {
+      const now = new Date().toISOString()
+      const rows = withEmail.map(c => ({
+        campaign_id: campaign.id,
+        name: c.name || '',
+        email: c.email,
+        service: c.service_type || '',
+        status: 'Active',
+        current_step: 0,
+        next_send_at: now,
+        replied: false,
+        emails_sent: 0,
+      }))
+      const created = await createEmailLeads(rows)
+      onDone(created.length, campaign.name)
+      const dup = withEmail.length - created.length
+      if (dup > 0) notify(`Skipped ${dup} contact${dup !== 1 ? 's' : ''} already enrolled in a campaign.`, 'success')
+      onClose()
+    } catch (e) {
+      notify(e.code === 'DUP_ALL'
+        ? 'Those contacts are already enrolled in a campaign — a contact can only be in one campaign at a time.'
+        : 'Failed to enroll: ' + e.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Send size={16} className="text-blue-500" /> Add to Sales Outreach</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-slate-400"><Loader2 size={20} className="animate-spin mr-2" /> Loading campaigns...</div>
+          ) : campaigns.length === 0 ? (
+            <div className="text-sm text-slate-500 dark:text-slate-400">
+              No Sales Outreach campaign exists yet. Create one on the <span className="font-medium text-slate-700 dark:text-slate-200">Email Campaigns</span> page first.
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Outreach Campaign</label>
+                <select value={campaignId} onChange={e => setCampaignId(e.target.value)} className={inputCls2}>
+                  {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-600 dark:text-slate-300">
+                {withEmail.length} contact{withEmail.length !== 1 ? 's' : ''} will be enrolled in "{campaign?.name}". Emails go out during the campaign's sending window.
+                {skipped > 0 && <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">{skipped} skipped (no email address).</div>}
+              </div>
+            </>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button onClick={submit} disabled={saving || loading || campaigns.length === 0 || withEmail.length === 0} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Enroll {withEmail.length || ''}
+            </button>
+            <button onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const fieldCls = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100'
 
 function BulkImportModal({ onClose, onImported }) {
@@ -932,7 +1026,9 @@ export default function Contacts() {
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [confirmPending, setConfirmPending] = useState(null)
   const [nurtureOpen, setNurtureOpen] = useState(false)
+  const [outreachOpen, setOutreachOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [enrollmentMap, setEnrollmentMap] = useState({}) // { [email_lower]: campaignName }
   // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
   const [groups, setGroups] = useState([])
   const [memberships, setMemberships] = useState([]) // [{ group_id, contact_id }]
@@ -964,12 +1060,17 @@ export default function Contacts() {
     }
   }, [location.state])
 
+  function reloadEnrollmentMap() {
+    getContactEnrollments().then(setEnrollmentMap).catch(() => {})
+  }
+
   useEffect(() => {
-    Promise.all([getContacts(), getContactGroups(), getGroupMemberships()])
-      .then(([data, grps, mems]) => {
+    Promise.all([getContacts(), getContactGroups(), getGroupMemberships(), getContactEnrollments()])
+      .then(([data, grps, mems, enrollMap]) => {
         setContacts(data)
         setGroups(grps)
         setMemberships(mems)
+        setEnrollmentMap(enrollMap)
         if (pendingContactId.current) {
           const found = data.find(c => c.id === pendingContactId.current)
           if (found) setSelected(found)
@@ -1098,6 +1199,13 @@ export default function Contacts() {
   const allSources = [...new Set(contacts.map(c => c.source).filter(Boolean))]
   const inputCls = 'px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
+  // Hide enrollment buttons when every selected contact is already in a campaign
+  const selectedContacts = contacts.filter(c => selectedIds.has(c.id))
+  const allSelectedEnrolled = selectedContacts.length > 0 && selectedContacts.every(c => {
+    const e = (c.email || '').trim().toLowerCase()
+    return e && enrollmentMap[e]
+  })
+
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-slate-400">
       <Loader2 size={28} className="animate-spin mr-2" /> Loading contacts...
@@ -1155,12 +1263,20 @@ export default function Contacts() {
                 <FolderPlus size={14} /> Add to Group
               </button>
             )}
-            {!isDemo && (
+            {!isDemo && !allSelectedEnrolled && (
               <button
                 onClick={() => setNurtureOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
               >
                 <Heart size={14} /> Add to Nurture
+              </button>
+            )}
+            {!isDemo && !allSelectedEnrolled && (
+              <button
+                onClick={() => setOutreachOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <Send size={14} /> Add to Outreach
               </button>
             )}
             {!isDemo && (
@@ -1265,6 +1381,7 @@ export default function Contacts() {
                 <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Service</th>
                 <th className="text-left px-4 py-3 font-medium">Interest</th>
                 <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">Status</th>
+                <th className="text-left px-4 py-3 font-medium hidden xl:table-cell">Campaign</th>
                 <th className="text-left px-4 py-3 font-medium cursor-pointer hover:text-slate-700 dark:hover:text-slate-300 hidden md:table-cell" onClick={() => toggleSort('last_action_date')}>
                   <div className="flex items-center gap-1">Last Action <SortIcon col="last_action_date" /></div>
                 </th>
@@ -1320,6 +1437,15 @@ export default function Contacts() {
                         {c.lead_status}
                       </span>
                     </td>
+                    <td className="px-4 py-3.5 hidden xl:table-cell">
+                      {(() => {
+                        const e = (c.email || '').trim().toLowerCase()
+                        const camp = e && enrollmentMap[e]
+                        return camp
+                          ? <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 whitespace-nowrap">{camp}</span>
+                          : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+                      })()}
+                    </td>
                     <td className="px-4 py-3.5 text-xs text-slate-400 dark:text-slate-500 hidden md:table-cell">
                       {c.last_action_date ? new Date(c.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '—'}
                     </td>
@@ -1362,7 +1488,14 @@ export default function Contacts() {
         <NurtureEnrollModal
           contacts={contacts.filter(c => selectedIds.has(c.id))}
           onClose={() => setNurtureOpen(false)}
-          onDone={(n) => { setSelectedIds(new Set()); notify(`Enrolled ${n} client${n !== 1 ? 's' : ''} into the nurture campaign.`, 'success') }}
+          onDone={(n) => { setSelectedIds(new Set()); reloadEnrollmentMap(); notify(`Enrolled ${n} client${n !== 1 ? 's' : ''} into the nurture campaign.`, 'success') }}
+        />
+      )}
+      {outreachOpen && (
+        <OutreachEnrollModal
+          contacts={contacts.filter(c => selectedIds.has(c.id))}
+          onClose={() => setOutreachOpen(false)}
+          onDone={(n, campaignName) => { setSelectedIds(new Set()); reloadEnrollmentMap(); notify(`Enrolled ${n} contact${n !== 1 ? 's' : ''} into "${campaignName}".`, 'success') }}
         />
       )}
       {importOpen && (
