@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Users, TrendingUp, CalendarDays, Activity, ArrowUpRight, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Users, TrendingUp, CalendarDays, Activity, ArrowUpRight, Loader2, Mail, Zap, Heart, MailOpen } from 'lucide-react'
 import { getDashboardStats, getWorkflowExecutions } from '../services/api'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
+import { useInbox } from '../context/InboxContext'
 
 const sourceColors = {
   Website:   '#3b82f6',
@@ -63,7 +65,35 @@ function StatCard({ title, value, sub, icon: Icon, color, trend }) {
   )
 }
 
+const GRADIENTS = [
+  'from-blue-400 to-blue-600', 'from-violet-400 to-purple-600',
+  'from-emerald-400 to-teal-600', 'from-rose-400 to-pink-600',
+  'from-amber-400 to-orange-500', 'from-cyan-400 to-sky-600',
+  'from-indigo-400 to-blue-600', 'from-pink-400 to-rose-600',
+]
+function threadAvatarGradient(str) {
+  let h = 0
+  for (let i = 0; i < (str || '').length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0
+  return GRADIENTS[h % GRADIENTS.length]
+}
+function threadInitials(name) {
+  if (!name) return '?'
+  return name.split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+}
+function stripHtmlDash(html) {
+  return (html || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+}
+function fmtShortDash(ts) {
+  const toET = t => { const d = new Date(new Date(t).toLocaleString('en-US', { timeZone: 'America/Toronto' })); d.setHours(0,0,0,0); return d }
+  const diff = (toET(new Date()) - toET(ts)) / 86400000
+  if (diff < 1) return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Toronto' })
+  if (diff < 2) return 'Yesterday'
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' })
+}
+
 export default function Dashboard() {
+  const navigate = useNavigate()
+  const { unreadThreads, unreadCount } = useInbox()
   const [stats, setStats] = useState(null)
   const [executions, setExecutions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -132,6 +162,83 @@ export default function Dashboard() {
           trend="Last 50 runs"
         />
       </div>
+
+      {/* Unread emails section — only shown when there are unread messages */}
+      {unreadCount > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-blue-200 dark:border-blue-800 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
+                <Mail size={14} className="text-white" />
+              </div>
+              <h2 className="font-semibold text-slate-900 dark:text-white">Unread Messages</h2>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white shadow-sm">
+                {unreadCount}
+              </span>
+            </div>
+            <button
+              onClick={() => navigate('/inbox')}
+              className="flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Open Inbox <ArrowUpRight size={12} />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-slate-700/60">
+            {unreadThreads.slice(0, 5).map(t => {
+              const isNurture = t.kind === 'nurture'
+              const preview = (t.latestInbound?.body || t.latestMessage?.body || '')
+                .replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ')
+                .replace(/^>.*$/gm, '').replace(/\n+/g, ' ').trim().slice(0, 100)
+              return (
+                <button
+                  key={`${t.kind}:${t.id}`}
+                  onClick={() => navigate('/inbox')}
+                  className="w-full flex items-center gap-3 px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors text-left"
+                >
+                  {/* Unread dot */}
+                  <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+
+                  {/* Avatar */}
+                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${threadAvatarGradient(t.name)} flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm`}>
+                    {threadInitials(t.name)}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{t.name}</span>
+                      {t.campaign && (
+                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0
+                          ${isNurture
+                            ? 'bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'
+                            : 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                          }`}>
+                          {isNurture ? <Heart size={8} /> : <Zap size={8} />}
+                          {t.campaign.name}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{preview || 'New message'}</p>
+                  </div>
+
+                  {/* Time */}
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500 flex-shrink-0 font-medium">
+                    {t.latestInbound && fmtShortDash(t.latestInbound.created_at)}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {unreadCount > 5 && (
+            <button
+              onClick={() => navigate('/inbox')}
+              className="w-full py-2.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors border-t border-slate-100 dark:border-slate-700"
+            >
+              View {unreadCount - 5} more unread message{unreadCount - 5 !== 1 ? 's' : ''} →
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">

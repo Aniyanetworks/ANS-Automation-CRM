@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, RefreshCw, ChevronLeft, Loader2, Send,
@@ -6,11 +6,12 @@ import {
   MailOpen, Mail, SlidersHorizontal, Bot,
 } from 'lucide-react'
 import {
-  getInboxThreads, getEmailMessages, getNurtureMessages, sendManualReply,
+  getEmailMessages, getNurtureMessages, sendManualReply,
   updateEmailLead, updateNurtureClient,
 } from '../services/api'
 import { useNotify } from '../context/NotifyContext'
 import { useAuth } from '../context/AuthContext'
+import { useInbox } from '../context/InboxContext'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -67,8 +68,6 @@ function dayLabel(ts) {
   if (diff < 2) return 'Yesterday'
   return new Date(ts).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })
 }
-
-const READ_KEY = 'inbox_read_map'
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -200,8 +199,9 @@ export default function Inbox() {
   const navigate = useNavigate()
   const { isDemo } = useAuth()
 
-  const [threads, setThreads] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Shared inbox state (threads, readMap, unread count) lives in InboxContext
+  const { threads, readMap, markRead, refresh: ctxRefresh, updateThread, initialLoading } = useInbox()
+
   const [refreshing, setRefreshing] = useState(false)
   const [selected, setSelected] = useState(null)
   const [messages, setMessages] = useState([])
@@ -210,47 +210,23 @@ export default function Inbox() {
   const [sending, setSending] = useState(false)
   const [togglingAI, setTogglingAI] = useState(false)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState('all')       // all | unread | inbound | outbound
-  const [typeFilter, setTypeFilter] = useState('all') // all | outreach | nurture
-  const [readMap, setReadMap] = useState({})
+  const [filter, setFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
 
   const messagesEndRef = useRef(null)
   const textareaRef = useRef(null)
 
-  // Load read state + threads on mount
-  useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(READ_KEY) || '{}')
-      setReadMap(stored)
-    } catch {}
-    loadThreads()
-  }, [])
-
   async function loadThreads(quiet = false) {
-    if (quiet) setRefreshing(true); else setLoading(true)
-    try {
-      const data = await getInboxThreads()
-      setThreads(data)
-    } catch (e) {
-      notify('Failed to load inbox: ' + e.message, 'error')
-    } finally {
-      setLoading(false); setRefreshing(false)
-    }
+    if (quiet) setRefreshing(true)
+    try { await ctxRefresh() } catch (e) { notify('Failed to refresh inbox: ' + e.message, 'error') }
+    finally { setRefreshing(false) }
   }
 
   function isUnread(thread) {
     if (!thread.latestInbound) return false
-    const key = `${thread.kind}:${thread.id}`
-    const last = readMap[key]
+    const last = readMap[`${thread.kind}:${thread.id}`]
     return !last || new Date(thread.latestInbound.created_at) > new Date(last)
-  }
-
-  function markRead(thread) {
-    const key = `${thread.kind}:${thread.id}`
-    const next = { ...readMap, [key]: new Date().toISOString() }
-    setReadMap(next)
-    try { localStorage.setItem(READ_KEY, JSON.stringify(next)) } catch {}
   }
 
   async function selectThread(thread) {
@@ -330,8 +306,7 @@ export default function Inbox() {
       } else {
         await updateNurtureClient(selected.id, { ai_reply_enabled: newVal })
       }
-      const patch = t => t.kind === selected.kind && t.id === selected.id ? { ...t, aiReplyEnabled: newVal } : t
-      setThreads(prev => prev.map(patch))
+      updateThread(selected.kind, selected.id, { aiReplyEnabled: newVal })
       setSelected(prev => ({ ...prev, aiReplyEnabled: newVal }))
     } catch (e) {
       notify('Failed to update AI reply: ' + e.message, 'error')
@@ -475,7 +450,7 @@ export default function Inbox() {
 
         {/* Thread list */}
         <div className="flex-1 overflow-y-auto">
-          {loading ? (
+          {initialLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
               <Loader2 size={24} className="animate-spin" />
               <span className="text-sm">Loading conversations…</span>

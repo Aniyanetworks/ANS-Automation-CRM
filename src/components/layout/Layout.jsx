@@ -4,6 +4,7 @@ import { Eye } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Header from './Header'
 import { useAuth } from '../../context/AuthContext'
+import { InboxProvider } from '../../context/InboxContext'
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -21,6 +22,7 @@ export default function Layout() {
   }
 
   return (
+    <InboxProvider>
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {sidebarOpen && (
         <div
@@ -42,5 +44,6 @@ export default function Layout() {
         </main>
       </div>
     </div>
+    </InboxProvider>
   )
 }

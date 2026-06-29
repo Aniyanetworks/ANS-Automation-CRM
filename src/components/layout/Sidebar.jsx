@@ -5,6 +5,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Inbox,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useInbox } from '../../context/InboxContext'
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -27,6 +28,7 @@ function getInitials(name) {
 
 export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const { user, signOut } = useAuth()
+  const { unreadCount } = useInbox()
   const navigate = useNavigate()
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'
@@ -69,23 +71,39 @@ export default function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={onClose}
-            title={collapsed ? label : undefined}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${centerOnCollapse} ${isActive
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`
-            }
-          >
-            <Icon size={17} className="flex-shrink-0" />
-            <span className={hideOnCollapse}>{label}</span>
-          </NavLink>
-        ))}
+        {navItems.map(({ to, icon: Icon, label }) => {
+          const isInbox = label === 'Inbox'
+          const showBadge = isInbox && unreadCount > 0
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={onClose}
+              title={collapsed ? (isInbox && unreadCount > 0 ? `Inbox (${unreadCount} unread)` : label) : undefined}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${centerOnCollapse} ${isActive
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`
+              }
+            >
+              <div className="relative flex-shrink-0">
+                <Icon size={17} />
+                {showBadge && collapsed && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center leading-none">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className={hideOnCollapse}>{label}</span>
+              {showBadge && !collapsed && (
+                <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white leading-none min-w-[18px] text-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </NavLink>
+          )
+        })}
       </nav>
 
       <div className="px-3 pb-4 border-t border-slate-800 pt-3 space-y-0.5">
