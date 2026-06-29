@@ -88,7 +88,7 @@ function getStage(contact) {
 }
 function formatDate(ts) {
   if (!ts) return '—'
-  return new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })
+  return new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Etc/GMT+5' })
 }
 
 // ── Contact Detail Modal ───────────────────────────────────────────────────

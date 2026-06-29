@@ -447,7 +447,7 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
             <div>
               <div className="text-slate-400 font-medium mb-1">Last Action</div>
               <div className="text-slate-700 dark:text-slate-300">
-                {contact.last_action_date ? new Date(contact.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) : '—'}
+                {contact.last_action_date ? new Date(contact.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'Etc/GMT+5' }) : '—'}
               </div>
             </div>
           </div>
@@ -1321,7 +1321,7 @@ export default function Contacts() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-xs text-slate-400 dark:text-slate-500 hidden md:table-cell">
-                      {c.last_action_date ? new Date(c.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '—'}
+                      {c.last_action_date ? new Date(c.last_action_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT+5' }) : '—'}
                     </td>
                   </tr>
                 )

@@ -38,7 +38,7 @@ function exportExecsCsv(rows, from, to) {
   const lines = [header.join(',')]
   for (const e of rows) {
     lines.push([
-      e.timestamp ? new Date(e.timestamp).toLocaleString('en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) + ' EST' : '',
+      e.timestamp ? new Date(e.timestamp).toLocaleString('en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT+5' }) + ' EST' : '',
       e.status || '',
       e.contact_name || '',
       e.workflow_name || '',
@@ -253,7 +253,7 @@ export default function EmailReport() {
                       <span className={`text-xs ${err ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>{e.notes || '—'}</span>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                      {e.timestamp ? new Date(e.timestamp).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) + ' EST' : '—'}
+                      {e.timestamp ? new Date(e.timestamp).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT+5' }) + ' EST' : '—'}
                     </td>
                   </tr>
                 )
