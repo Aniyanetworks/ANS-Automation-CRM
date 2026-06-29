@@ -478,7 +478,7 @@ export default function Inbox() {
         </div>
 
         {/* Stats footer */}
-        {!loading && threads.length > 0 && (
+        {!initialLoading && threads.length > 0 && (
           <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
             <span className="text-xs text-slate-400">
               {filtered.length} of {threads.length} conversation{threads.length !== 1 ? 's' : ''}
