@@ -63,11 +63,11 @@ function toggleDayCsv(csv, n) {
 
 // The next moment the campaign's sending window opens, as an ISO string.
 // Mirrors the scheduler's gate: only allowed weekdays (1=Mon..7=Sun) and the
-// hour window, evaluated in Etc/GMT+5 (EST/EDT). Supports wrap-around
+// hour window, evaluated in America/Toronto (EST/EDT). Supports wrap-around
 // windows where start > end (e.g. 6 PM → 5 PM = open overnight). If we're
 // already inside an open window on an allowed day, returns now (send asap).
 function nextWindowStart(startHour, endHour, daysCsv) {
-  const tz = 'Etc/GMT+5'
+  const tz = 'America/Toronto'
   const start = Number(startHour) || 0
   const end = endHour == null ? 24 : Number(endHour)
   const allowed = new Set(String(daysCsv ?? '1,2,3,4,5,6,7').split(',').map(x => parseInt(x.trim(), 10)).filter(Boolean))
@@ -938,20 +938,20 @@ function NurtureDetail({ campaign, onUpdated }) {
 
 // ── Lead Conversation ─────────────────────────────────────────────────────────
 
-// All campaign send times are shown in EST (Etc/GMT+5), regardless of the viewer's timezone.
+// All campaign send times are shown in EST (America/Toronto), regardless of the viewer's timezone.
 function fmtDateTime(ts) {
   if (!ts) return '—'
-  return new Date(ts).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT+5' }) + ' EST'
+  return new Date(ts).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) + ' EST'
 }
 
 // Short time + day-separator labels for the chat view (EST).
 function fmtTime(ts) {
   if (!ts) return ''
-  return new Date(ts).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Etc/GMT+5' })
+  return new Date(ts).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'America/Toronto' })
 }
 function dayLabel(ts) {
   if (!ts) return ''
-  const tz = 'Etc/GMT+5'
+  const tz = 'America/Toronto'
   const key = d => d.toLocaleDateString('en-CA', { timeZone: tz })
   const d = new Date(ts), now = new Date(), yest = new Date(now.getTime() - 86400000)
   if (key(d) === key(now)) return 'Today'

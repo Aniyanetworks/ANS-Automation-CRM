@@ -334,7 +334,7 @@ function LeadHistoryModal({ lead, campaign, followupDays, followupMessages, onCl
   function stepDate(stepIndex) {
     const offsetDays = scheduleDays[stepIndex] || 0
     const d = new Date(enrolled.getTime() + offsetDays * 86400000)
-    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Etc/GMT+5' })
+    return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })
   }
 
   function stepLabel(i) {
@@ -385,7 +385,7 @@ function LeadHistoryModal({ lead, campaign, followupDays, followupMessages, onCl
               <div className="text-xs font-semibold mb-1 flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
                 <Star size={12} className="text-amber-500" /> Review Submitted
                 <span className="ml-auto font-normal text-slate-400">
-                  {new Date(lead.submitted_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Etc/GMT+5' })}
+                  {new Date(lead.submitted_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })}
                 </span>
               </div>
               {lead.review_comment && (
@@ -413,7 +413,7 @@ function LeadHistoryModal({ lead, campaign, followupDays, followupMessages, onCl
               let dateLabel = ''
               if (sent) dateLabel = `Sent ${stepDate(i)}`
               else if (isNext && lead.next_send_at) {
-                dateLabel = `Scheduled ${new Date(lead.next_send_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Etc/GMT+5' })}`
+                dateLabel = `Scheduled ${new Date(lead.next_send_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })}`
               } else if (pending) {
                 dateLabel = `Est. ${stepDate(i)}`
               }
@@ -472,7 +472,7 @@ function LeadHistoryModal({ lead, campaign, followupDays, followupMessages, onCl
 
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-700">
           <div className="text-xs text-slate-400">
-            Enrolled {enrolled.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Etc/GMT+5' })} ·
+            Enrolled {enrolled.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })} ·
             {sentCount} of {totalSteps} messages sent
           </div>
         </div>

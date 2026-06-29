@@ -35,10 +35,10 @@ function getAvatarColor(name) {
 }
 
 function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT+5' })
+  return new Date(ts).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' })
 }
 function formatDate(ts) {
-  return new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Etc/GMT+5' })
+  return new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' })
 }
 
 // Splits a message record into individual speaker bubbles.

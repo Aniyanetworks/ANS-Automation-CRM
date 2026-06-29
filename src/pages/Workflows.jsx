@@ -263,7 +263,7 @@ export default function Workflows() {
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-xs text-slate-400 dark:text-slate-500 hidden sm:table-cell">
-                          {exec.timestamp ? new Date(exec.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Etc/GMT+5' }) : '—'}
+                          {exec.timestamp ? new Date(exec.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '—'}
                         </td>
                         <td className="px-4 py-3.5">
                           {exec.notes && (
