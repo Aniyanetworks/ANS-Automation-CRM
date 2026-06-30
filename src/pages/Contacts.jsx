@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart, Upload, Download, FolderPlus, Send, Tag, Star } from 'lucide-react'
+import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart, Upload, Download, FolderPlus, Send, Tag, Star, Layers } from 'lucide-react'
 import {
   getContacts, updateContact, createContact, createContacts, deleteContact, deleteContacts,
   getNurtureCampaigns, createNurtureClients,
@@ -8,6 +8,7 @@ import {
   getEmailCampaigns, createEmailLeads,
   getReviewCampaigns, createReviewLeads,
   getContactEnrollments,
+  getPipelines, getContactPipelineAssignments, assignContactToPipeline, removeContactFromPipeline,
 } from '../services/api'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { useNotify } from '../context/NotifyContext'
@@ -224,7 +225,7 @@ function EditModal({ contact, onClose, onSave }) {
   )
 }
 
-function CreateModal({ onClose, onCreate }) {
+function CreateModal({ onClose, onCreate, pipelines }) {
   const notify = useNotify()
   const blankForm = {
     name: '', email: '', phone: '', source: 'Website',
@@ -232,7 +233,17 @@ function CreateModal({ onClose, onCreate }) {
     summary: '', message: '', client_note: '',
   }
   const [form, setForm] = useState(blankForm)
+  const [pipelineId, setPipelineId] = useState('')
+  const [stageId, setStageId] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const selectedPipeline = pipelines?.find(p => p.id === pipelineId)
+
+  function handlePipelineChange(id) {
+    setPipelineId(id)
+    const p = pipelines?.find(p => p.id === id)
+    setStageId(p?.stages[0]?.id || '')
+  }
 
   async function submit(e) {
     e.preventDefault()
@@ -245,6 +256,13 @@ function CreateModal({ onClose, onCreate }) {
         avatar: getInitials(form.name),
         avatar_color: getAvatarColor(form.name),
       })
+      if (pipelineId && stageId) {
+        try {
+          await assignContactToPipeline(created.id, pipelineId, stageId)
+        } catch (err) {
+          notify('Contact created, but failed to add to pipeline: ' + err.message, 'error')
+        }
+      }
       onCreate(created)
       onClose()
     } catch (err) {
@@ -316,6 +334,24 @@ function CreateModal({ onClose, onCreate }) {
               <textarea value={form.client_note} onChange={e => setForm(f => ({ ...f, client_note: e.target.value }))} rows={2} placeholder="Past work with us, project outcomes... (used for relationship check-ins)" className={`${inputCls} resize-none`} />
             </div>
           </div>
+
+          {pipelines && pipelines.length > 0 && (
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+              <label className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                <Layers size={12} className="text-indigo-500" /> Add to Pipeline (optional)
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <select value={pipelineId} onChange={e => handlePipelineChange(e.target.value)} className={inputCls}>
+                  <option value="">No pipeline</option>
+                  {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <select value={stageId} onChange={e => setStageId(e.target.value)} disabled={!pipelineId} className={`${inputCls} disabled:opacity-50`}>
+                  {(selectedPipeline?.stages || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
@@ -331,7 +367,32 @@ function CreateModal({ onClose, onCreate }) {
   )
 }
 
-function ContactDetail({ contact, onClose, onEdit, onDelete }) {
+function ContactDetail({ contact, pipelines, onClose, onEdit, onDelete }) {
+  const notify = useNotify()
+  const [assignments, setAssignments] = useState([])
+  const [loadingAssignments, setLoadingAssignments] = useState(true)
+  const [assignOpen, setAssignOpen] = useState(false)
+
+  useEffect(() => {
+    if (!contact) return
+    setLoadingAssignments(true)
+    getContactPipelineAssignments(contact.id)
+      .then(setAssignments)
+      .catch(() => {})
+      .finally(() => setLoadingAssignments(false))
+  }, [contact?.id])
+
+  async function handleRemoveAssignment(pipelineId) {
+    const snapshot = assignments
+    setAssignments(prev => prev.filter(a => a.pipelineId !== pipelineId))
+    try {
+      await removeContactFromPipeline(contact.id, pipelineId)
+    } catch (e) {
+      notify('Failed to remove from pipeline: ' + e.message, 'error')
+      setAssignments(snapshot)
+    }
+  }
+
   if (!contact) return null
   const initials = contact.avatar || getInitials(contact.name)
   const avatarColor = contact.avatar_color || getAvatarColor(contact.name)
@@ -387,6 +448,36 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
               <div className="text-sm font-medium text-slate-900 dark:text-white">{contact.service_type || '—'}</div>
             </div>
           </div>
+
+          {pipelines && pipelines.length > 0 && (
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-slate-400 font-medium flex items-center gap-1"><Layers size={12} /> Pipelines</div>
+                <button
+                  onClick={() => setAssignOpen(true)}
+                  className="flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  <Plus size={11} /> Add to Pipeline
+                </button>
+              </div>
+              {loadingAssignments ? (
+                <div className="text-xs text-slate-400 flex items-center gap-1.5"><Loader2 size={11} className="animate-spin" /> Loading...</div>
+              ) : assignments.length === 0 ? (
+                <div className="text-xs text-slate-400 italic">Not in any custom pipeline.</div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {assignments.map(a => (
+                    <span key={a.pipelineId} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                      {a.pipelineName}: {a.stageName}
+                      <button onClick={() => handleRemoveAssignment(a.pipelineId)} className="p-0.5 hover:bg-indigo-200/50 dark:hover:bg-indigo-800/50 rounded-full">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {contact.summary && (
             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
@@ -469,6 +560,81 @@ function ContactDetail({ contact, onClose, onEdit, onDelete }) {
           >
             <Trash2 size={14} /> Delete
           </button>
+        </div>
+      </div>
+      {assignOpen && (
+        <PipelineAssignModal
+          contactIds={[contact.id]}
+          pipelines={pipelines}
+          onClose={() => setAssignOpen(false)}
+          onDone={() => getContactPipelineAssignments(contact.id).then(setAssignments).catch(() => {})}
+        />
+      )}
+    </div>
+  )
+}
+
+function PipelineAssignModal({ contactIds, pipelines, onClose, onDone }) {
+  const notify = useNotify()
+  const [pipelineId, setPipelineId] = useState(pipelines[0]?.id || '')
+  const [stageId, setStageId] = useState(pipelines[0]?.stages[0]?.id || '')
+  const [saving, setSaving] = useState(false)
+
+  const pipeline = pipelines.find(p => p.id === pipelineId)
+
+  useEffect(() => {
+    const p = pipelines.find(p => p.id === pipelineId)
+    if (p && !p.stages.some(s => s.id === stageId)) {
+      setStageId(p.stages[0]?.id || '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineId])
+
+  async function submit() {
+    if (!pipelineId || !stageId || contactIds.length === 0) return
+    setSaving(true)
+    try {
+      await Promise.all(contactIds.map(id => assignContactToPipeline(id, pipelineId, stageId)))
+      onDone(contactIds.length, pipeline?.name)
+      onClose()
+    } catch (e) {
+      notify('Failed to assign to pipeline: ' + e.message, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls2 = 'w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Layers size={16} className="text-indigo-500" /> Add to Pipeline</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"><X size={18} className="text-slate-500 dark:text-slate-400" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Pipeline</label>
+            <select value={pipelineId} onChange={e => setPipelineId(e.target.value)} className={inputCls2}>
+              {pipelines.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Stage</label>
+            <select value={stageId} onChange={e => setStageId(e.target.value)} className={inputCls2}>
+              {(pipeline?.stages || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 text-sm text-slate-600 dark:text-slate-300">
+            {contactIds.length} contact{contactIds.length !== 1 ? 's' : ''} will be added to "{pipeline?.name}" &rarr; {pipeline?.stages.find(s => s.id === stageId)?.name}.
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={submit} disabled={saving || !pipelineId || !stageId} className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />} Assign
+            </button>
+            <button onClick={onClose} className="px-4 py-2 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1029,6 +1195,8 @@ export default function Contacts() {
   const [outreachOpen, setOutreachOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [enrollmentMap, setEnrollmentMap] = useState({}) // { [email_lower]: campaignName }
+  const [pipelines, setPipelines] = useState([])
+  const [pipelineBulkOpen, setPipelineBulkOpen] = useState(false)
   // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
   const [groups, setGroups] = useState([])
   const [memberships, setMemberships] = useState([]) // [{ group_id, contact_id }]
@@ -1065,12 +1233,13 @@ export default function Contacts() {
   }
 
   useEffect(() => {
-    Promise.all([getContacts(), getContactGroups(), getGroupMemberships(), getContactEnrollments()])
-      .then(([data, grps, mems, enrollMap]) => {
+    Promise.all([getContacts(), getContactGroups(), getGroupMemberships(), getContactEnrollments(), getPipelines()])
+      .then(([data, grps, mems, enrollMap, pipes]) => {
         setContacts(data)
         setGroups(grps)
         setMemberships(mems)
         setEnrollmentMap(enrollMap)
+        setPipelines(pipes)
         if (pendingContactId.current) {
           const found = data.find(c => c.id === pendingContactId.current)
           if (found) setSelected(found)
@@ -1287,6 +1456,14 @@ export default function Contacts() {
                 <Star size={14} /> Add to Review
               </button>
             )}
+            {!isDemo && pipelines.length > 0 && (
+              <button
+                onClick={() => setPipelineBulkOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <Layers size={14} /> Add to Pipeline
+              </button>
+            )}
             {!isDemo && (
               <button
                 onClick={() => setConfirmPending({ type: 'bulk' })}
@@ -1466,6 +1643,7 @@ export default function Contacts() {
       {selected && !editing && (
         <ContactDetail
           contact={selected}
+          pipelines={pipelines}
           onClose={() => setSelected(null)}
           onEdit={() => setEditing(true)}
           onDelete={() => setConfirmPending({ type: 'single', contact: selected })}
@@ -1482,6 +1660,7 @@ export default function Contacts() {
         <CreateModal
           onClose={() => setCreating(false)}
           onCreate={handleCreate}
+          pipelines={pipelines}
         />
       )}
       {nurtureOpen && (
@@ -1496,6 +1675,14 @@ export default function Contacts() {
           contacts={contacts.filter(c => selectedIds.has(c.id))}
           onClose={() => setOutreachOpen(false)}
           onDone={(n, campaignName) => { setSelectedIds(new Set()); reloadEnrollmentMap(); notify(`Enrolled ${n} contact${n !== 1 ? 's' : ''} into "${campaignName}".`, 'success') }}
+        />
+      )}
+      {pipelineBulkOpen && (
+        <PipelineAssignModal
+          contactIds={[...selectedIds]}
+          pipelines={pipelines}
+          onClose={() => setPipelineBulkOpen(false)}
+          onDone={(n, pipelineName) => { setSelectedIds(new Set()); notify(`Added ${n} contact${n !== 1 ? 's' : ''} to "${pipelineName}".`, 'success') }}
         />
       )}
       {importOpen && (

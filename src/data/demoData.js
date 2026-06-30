@@ -215,6 +215,7 @@ export const demoCampaigns = [
     ai_reply_prompt: 'You are a helpful sales assistant for Aniya Network Solutions. Reply warmly, answer questions, and gently steer toward booking a call. Keep it short (2-4 sentences).',
     interval_days: 30, interval_unit: 'days',
     daily_limit: 40, send_days: '1,2,3,4,5', send_start_hour: 9, send_end_hour: 18,
+    ai_reply_enabled: true, reply_delay_minutes: 2, auto_followup_enabled: true,
     created_at: '2026-06-01T09:00:00Z',
   },
   {
@@ -223,6 +224,7 @@ export const demoCampaigns = [
     ai_reply_prompt: 'You are writing to a PAST client to maintain the relationship. Warm, genuine check-ins about how they and their business are doing. Never a sales pitch.',
     interval_days: 30, interval_unit: 'days',
     daily_limit: 50, send_days: '1,2,3,4,5,6,7', send_start_hour: 0, send_end_hour: 24,
+    ai_reply_enabled: true, reply_delay_minutes: 5, auto_followup_enabled: true,
     created_at: '2026-05-15T09:00:00Z',
   },
 ]
@@ -238,10 +240,11 @@ export const demoSteps = {
 
 export const demoLeads = {
   [DEMO_OUTREACH_CAMPAIGN]: [
-    { id: 'd-l01', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Priya Sharma', email: 'priya@sharmaco.com', service: 'Website Redesign', status: 'Active', current_step: 1, next_send_at: '2026-06-13T09:00:00Z', last_sent_at: '2026-06-10T09:00:00Z', replied: false, emails_sent: 1, thread_id: 't-001', message_id: 'mi-001', created_at: '2026-06-10T08:55:00Z' },
-    { id: 'd-l02', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Tom Becker', email: 'tom.becker@beckerlaw.com', service: 'SEO', status: 'Replied', current_step: 1, next_send_at: '2026-06-12T09:00:00Z', last_sent_at: '2026-06-09T09:00:00Z', replied: true, emails_sent: 1, thread_id: 't-002', message_id: 'mi-002', created_at: '2026-06-09T08:55:00Z' },
-    { id: 'd-l03', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Nadia Hassan', email: 'nadia@hassanstudio.com', service: 'Brand Identity', status: 'Completed', current_step: 3, next_send_at: '2026-06-11T09:00:00Z', last_sent_at: '2026-06-11T09:00:00Z', replied: false, emails_sent: 3, thread_id: 't-003', message_id: 'mi-003', created_at: '2026-06-02T08:55:00Z' },
-    { id: 'd-l04', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'George Pappas', email: 'george@pappasdiner.com', service: 'Online Ordering', status: 'Active', current_step: 0, next_send_at: '2026-06-12T09:00:00Z', last_sent_at: null, replied: false, emails_sent: 0, thread_id: null, message_id: null, created_at: '2026-06-11T08:55:00Z' },
+    { id: 'd-l01', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Priya Sharma', email: 'priya@sharmaco.com', service: 'Website Redesign', status: 'Active', current_step: 1, next_send_at: '2026-06-13T09:00:00Z', last_sent_at: '2026-06-10T09:00:00Z', replied: false, emails_sent: 1, thread_id: 't-001', message_id: 'mi-001', ai_reply_enabled: true, created_at: '2026-06-10T08:55:00Z' },
+    { id: 'd-l02', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Tom Becker', email: 'tom.becker@beckerlaw.com', service: 'SEO', status: 'Replied', current_step: 1, next_send_at: '2026-06-12T09:00:00Z', last_sent_at: '2026-06-09T09:00:00Z', replied: true, emails_sent: 1, thread_id: 't-002', message_id: 'mi-002', ai_reply_enabled: false, created_at: '2026-06-09T08:55:00Z' },
+    { id: 'd-l03', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Nadia Hassan', email: 'nadia@hassanstudio.com', service: 'Brand Identity', status: 'Completed', current_step: 3, next_send_at: '2026-06-11T09:00:00Z', last_sent_at: '2026-06-11T09:00:00Z', replied: false, emails_sent: 3, thread_id: 't-003', message_id: 'mi-003', ai_reply_enabled: true, created_at: '2026-06-02T08:55:00Z' },
+    { id: 'd-l04', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'George Pappas', email: 'george@pappasdiner.com', service: 'Online Ordering', status: 'Active', current_step: 0, next_send_at: '2026-06-12T09:00:00Z', last_sent_at: null, replied: false, emails_sent: 0, thread_id: null, message_id: null, ai_reply_enabled: true, created_at: '2026-06-11T08:55:00Z' },
+    { id: 'd-l05', campaign_id: DEMO_OUTREACH_CAMPAIGN, name: 'Wendy Liu', email: 'wendy@liuconsulting.com', service: 'Brand Strategy', status: 'Unsubscribed', current_step: 1, next_send_at: null, last_sent_at: '2026-06-08T09:00:00Z', replied: false, emails_sent: 1, thread_id: 't-005', message_id: 'mi-005', ai_reply_enabled: true, created_at: '2026-06-07T08:55:00Z' },
   ],
   [DEMO_NURTURE_CAMPAIGN]: [],
 }
@@ -269,9 +272,134 @@ export const demoNurtureMessages = {
 
 export const demoNurtureClients = {
   [DEMO_NURTURE_CAMPAIGN]: [
-    { id: 'd-n01', campaign_id: DEMO_NURTURE_CAMPAIGN, contact_id: 'd-c12', name: 'Daniel Foster', email: 'daniel.foster@fosterdental.ca', note: 'Completed a booking + reminder automation project. Smooth delivery, client was delighted.', status: 'Active', next_send_at: '2026-07-09T09:00:00Z', last_sent_at: '2026-06-09T09:00:00Z', last_message: 'Hi Daniel! I was just thinking about the booking automation we built together and hoped it is still saving your front desk plenty of time. How have you and the clinic been lately?', emails_sent: 2, created_at: '2026-05-15T09:05:00Z' },
-    { id: 'd-n02', campaign_id: DEMO_NURTURE_CAMPAIGN, contact_id: 'd-c08', name: 'Robert Mensah', email: 'rob.mensah@retailgroup.ca', note: 'Delivered a 3-location CRM rollout. Very happy — great reference candidate.', status: 'Active', next_send_at: '2026-07-12T09:00:00Z', last_sent_at: '2026-06-12T09:00:00Z', last_message: 'Hi Robert! Hope all three locations are humming along. I still remember how smoothly the CRM rollout went — how is the team finding it these days?', emails_sent: 1, created_at: '2026-05-15T09:05:00Z' },
+    { id: 'd-n01', campaign_id: DEMO_NURTURE_CAMPAIGN, contact_id: 'd-c12', name: 'Daniel Foster', email: 'daniel.foster@fosterdental.ca', note: 'Completed a booking + reminder automation project. Smooth delivery, client was delighted.', status: 'Active', next_send_at: '2026-07-09T09:00:00Z', last_sent_at: '2026-06-09T09:00:00Z', last_message: 'Hi Daniel! I was just thinking about the booking automation we built together and hoped it is still saving your front desk plenty of time. How have you and the clinic been lately?', emails_sent: 2, ai_reply_enabled: true, created_at: '2026-05-15T09:05:00Z' },
+    { id: 'd-n02', campaign_id: DEMO_NURTURE_CAMPAIGN, contact_id: 'd-c08', name: 'Robert Mensah', email: 'rob.mensah@retailgroup.ca', note: 'Delivered a 3-location CRM rollout. Very happy — great reference candidate.', status: 'Active', next_send_at: '2026-07-12T09:00:00Z', last_sent_at: '2026-06-12T09:00:00Z', last_message: 'Hi Robert! Hope all three locations are humming along. I still remember how smoothly the CRM rollout went — how is the team finding it these days?', emails_sent: 1, ai_reply_enabled: false, created_at: '2026-05-15T09:05:00Z' },
   ],
+}
+
+// Inbox threads: one per lead/client that has at least one message, newest first.
+// Mirrors the shape getInboxThreads() builds from live Supabase tables.
+export function demoInboxThreads() {
+  const campMap = {}
+  for (const c of demoCampaigns) campMap[c.id] = c
+
+  const threads = []
+  for (const l of Object.values(demoLeads).flat()) {
+    const msgs = demoEmailMessages[l.id] || []
+    if (msgs.length === 0) continue
+    const latest = msgs[msgs.length - 1]
+    const inbound = [...msgs].reverse().find(m => m.direction === 'inbound') || null
+    threads.push({
+      id: l.id, kind: 'email', name: l.name || l.email, email: l.email,
+      campaignId: l.campaign_id, campaign: campMap[l.campaign_id] || null,
+      latestMessage: latest, latestInbound: inbound, aiReplyEnabled: l.ai_reply_enabled !== false,
+    })
+  }
+  for (const c of Object.values(demoNurtureClients).flat()) {
+    const msgs = demoNurtureMessages[c.id] || []
+    if (msgs.length === 0) continue
+    const latest = msgs[msgs.length - 1]
+    const inbound = [...msgs].reverse().find(m => m.direction === 'inbound') || null
+    threads.push({
+      id: c.id, kind: 'nurture', name: c.name || c.email, email: c.email,
+      campaignId: c.campaign_id, campaign: campMap[c.campaign_id] || null,
+      latestMessage: latest, latestInbound: inbound, aiReplyEnabled: c.ai_reply_enabled !== false,
+    })
+  }
+  return threads.sort((a, b) => new Date(b.latestMessage.created_at) - new Date(a.latestMessage.created_at))
+}
+
+// Computed board for the built-in "Email Follow-up" pipeline — same stage
+// logic as the live getEmailPipelineLeads(), applied to the demo fixtures.
+export function demoEmailPipelineLeads() {
+  const campMap = {}
+  for (const c of demoCampaigns) campMap[c.id] = c
+
+  const repliedClientIds = new Set()
+  for (const msgs of Object.values(demoNurtureMessages)) {
+    for (const m of msgs) if (m.direction === 'inbound') repliedClientIds.add(m.client_id)
+  }
+
+  const rows = []
+  for (const l of Object.values(demoLeads).flat()) {
+    let stage = 'Enrolled Leads'
+    if (l.status === 'Unsubscribed') stage = 'Unsubscribed'
+    else if (l.replied) stage = 'Replied'
+    else if (l.status === 'Completed' || l.status === 'Error') stage = 'Completed'
+    else if ((l.emails_sent || 0) >= 1) stage = 'Email Sent'
+    rows.push({ id: l.id, kind: 'outreach', name: l.name || l.email, email: l.email, campaignId: l.campaign_id, campaign: campMap[l.campaign_id] || null, stage, emailsSent: l.emails_sent || 0, createdAt: l.created_at })
+  }
+  for (const c of Object.values(demoNurtureClients).flat()) {
+    const hasReplied = repliedClientIds.has(c.id)
+    let stage = 'Enrolled Leads'
+    if (hasReplied) stage = 'Replied'
+    else if (c.status === 'Paused') stage = 'Completed'
+    else if ((c.emails_sent || 0) >= 1) stage = 'Email Sent'
+    rows.push({ id: c.id, kind: 'nurture', name: c.name || c.email, email: c.email, campaignId: c.campaign_id, campaign: campMap[c.campaign_id] || null, stage, emailsSent: c.emails_sent || 0, createdAt: c.created_at })
+  }
+  return rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+}
+
+// { [email_lowercase]: campaignName } for every enrolled email — feeds the
+// Campaign column on the Contacts page.
+export function demoContactEnrollments() {
+  const campMap = {}
+  for (const c of demoCampaigns) campMap[c.id] = c.name
+  const map = {}
+  for (const r of [...Object.values(demoLeads).flat(), ...Object.values(demoNurtureClients).flat()]) {
+    const e = (r.email || '').trim().toLowerCase()
+    if (e && r.campaign_id) map[e] = campMap[r.campaign_id] || 'Campaign'
+  }
+  return map
+}
+
+// ─── PIPELINES (admin-created) ──────────────────────────────────────────────
+
+export const demoPipelines = [
+  {
+    id: 'd-p01', name: 'Client Onboarding', created_at: '2026-06-01T09:00:00Z',
+    stages: [
+      { id: 'd-p01-s1', pipeline_id: 'd-p01', name: 'Kickoff Call', position: 0, created_at: '2026-06-01T09:00:00Z' },
+      { id: 'd-p01-s2', pipeline_id: 'd-p01', name: 'Building', position: 1, created_at: '2026-06-01T09:00:00Z' },
+      { id: 'd-p01-s3', pipeline_id: 'd-p01', name: 'Live & Happy', position: 2, created_at: '2026-06-01T09:00:00Z' },
+    ],
+  },
+]
+
+export const demoPipelineStageAssignments = [
+  { contact_id: 'd-c09', pipeline_id: 'd-p01', stage_id: 'd-p01-s1' },
+  { contact_id: 'd-c03', pipeline_id: 'd-p01', stage_id: 'd-p01-s2' },
+  { contact_id: 'd-c08', pipeline_id: 'd-p01', stage_id: 'd-p01-s3' },
+  { contact_id: 'd-c12', pipeline_id: 'd-p01', stage_id: 'd-p01-s3' },
+]
+
+export function demoPipelinesList() {
+  const counts = {}
+  for (const a of demoPipelineStageAssignments) counts[a.stage_id] = (counts[a.stage_id] || 0) + 1
+  return demoPipelines.map(p => ({ ...p, stages: p.stages.map(s => ({ ...s, contactCount: counts[s.id] || 0 })) }))
+}
+
+export function demoPipelineBoard(pipelineId) {
+  return demoPipelineStageAssignments
+    .filter(a => a.pipeline_id === pipelineId)
+    .map((a, i) => {
+      const contact = demoContacts.find(c => c.id === a.contact_id)
+      if (!contact) return null
+      return { assignmentId: `d-a${i}`, stageId: a.stage_id, ...contact }
+    })
+    .filter(Boolean)
+}
+
+export function demoContactPipelineAssignments(contactId) {
+  const pipelines = demoPipelinesList()
+  const result = []
+  for (const a of demoPipelineStageAssignments) {
+    if (a.contact_id !== contactId) continue
+    const pipeline = pipelines.find(p => p.id === a.pipeline_id)
+    const stage = pipeline?.stages.find(s => s.id === a.stage_id)
+    if (pipeline && stage) result.push({ pipelineId: pipeline.id, pipelineName: pipeline.name, stageId: stage.id, stageName: stage.name })
+  }
+  return result
 }
 
 // ─── CONTACT GROUPS ───────────────────────────────────────────────────────────

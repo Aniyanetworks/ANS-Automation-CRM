@@ -598,7 +598,7 @@ export async function getAllNurtureClients() {
 
 // Returns all threads (leads + nurture clients with ≥1 message) sorted by latest message.
 export async function getInboxThreads() {
-  if (isDemo()) return []
+  if (isDemo()) return demo.demoInboxThreads()
   const [leadsRes, clientsRes, campaignsRes, emailMsgsRes, nurtureMsgsRes] = await Promise.all([
     supabase.from('email_leads').select('id, name, email, campaign_id, replied, ai_reply_enabled'),
     supabase.from('nurture_clients').select('id, name, email, campaign_id, ai_reply_enabled'),
@@ -637,7 +637,7 @@ export async function getInboxThreads() {
 
 // Returns { [email_lowercase]: campaignName } for every enrolled email (outreach + nurture).
 export async function getContactEnrollments() {
-  if (isDemo()) return {}
+  if (isDemo()) return demo.demoContactEnrollments()
   const [leadsRes, clientsRes, campaignsRes] = await Promise.all([
     supabase.from('email_leads').select('email, campaign_id'),
     supabase.from('nurture_clients').select('email, campaign_id'),
@@ -652,6 +652,201 @@ export async function getContactEnrollments() {
     if (e && r.campaign_id) map[e] = campMap[r.campaign_id] || 'Campaign'
   }
   return map
+}
+
+// Computed board for the built-in "Email Follow-up" pipeline. Not stored —
+// derived live from email_leads / nurture_clients / nurture_messages so it
+// can never drift from what the n8n workflows actually did.
+export async function getEmailPipelineLeads() {
+  if (isDemo()) return demo.demoEmailPipelineLeads()
+  const [leadsRes, clientsRes, campaignsRes, nurtureMsgsRes] = await Promise.all([
+    supabase.from('email_leads').select('id, name, email, campaign_id, status, replied, emails_sent, created_at'),
+    supabase.from('nurture_clients').select('id, name, email, campaign_id, status, emails_sent, created_at'),
+    supabase.from('email_campaigns').select('id, name, type'),
+    supabase.from('nurture_messages').select('client_id, direction'),
+  ])
+  for (const r of [leadsRes, clientsRes, campaignsRes, nurtureMsgsRes]) {
+    if (r.error) throw r.error
+  }
+  const campMap = {}
+  for (const c of campaignsRes.data || []) campMap[c.id] = c
+  const repliedClientIds = new Set()
+  for (const m of nurtureMsgsRes.data || []) {
+    if (m.direction === 'inbound') repliedClientIds.add(m.client_id)
+  }
+
+  const rows = []
+  for (const l of leadsRes.data || []) {
+    const camp = campMap[l.campaign_id] || null
+    let stage = 'Enrolled Leads'
+    if (l.status === 'Unsubscribed') stage = 'Unsubscribed'
+    else if (l.replied) stage = 'Replied'
+    else if (l.status === 'Completed' || l.status === 'Error') stage = 'Completed'
+    else if ((l.emails_sent || 0) >= 1) stage = 'Email Sent'
+    rows.push({ id: l.id, kind: 'outreach', name: l.name || l.email, email: l.email, campaignId: l.campaign_id, campaign: camp, stage, emailsSent: l.emails_sent || 0, createdAt: l.created_at })
+  }
+  for (const c of clientsRes.data || []) {
+    const camp = campMap[c.campaign_id] || null
+    const hasReplied = repliedClientIds.has(c.id)
+    let stage = 'Enrolled Leads'
+    if (hasReplied) stage = 'Replied'
+    else if (c.status === 'Paused') stage = 'Completed'
+    else if ((c.emails_sent || 0) >= 1) stage = 'Email Sent'
+    rows.push({ id: c.id, kind: 'nurture', name: c.name || c.email, email: c.email, campaignId: c.campaign_id, campaign: camp, stage, emailsSent: c.emails_sent || 0, createdAt: c.created_at })
+  }
+  return rows.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+}
+
+// ─── PIPELINES (admin-created) ──────────────────────────────────────────────
+// Custom pipelines are fully additive: separate tables, never touch
+// contacts.lead_status (the built-in "Sales Pipeline" used by automation).
+
+export async function getPipelines() {
+  if (isDemo()) return demo.demoPipelinesList()
+  const [pipelinesRes, stagesRes, countsRes] = await Promise.all([
+    supabase.from('pipelines').select('*').order('created_at', { ascending: true }),
+    supabase.from('pipeline_stages').select('*').order('position', { ascending: true }),
+    supabase.from('contact_pipeline_stages').select('pipeline_id, stage_id'),
+  ])
+  if (pipelinesRes.error) throw pipelinesRes.error
+  if (stagesRes.error) throw stagesRes.error
+  if (countsRes.error) throw countsRes.error
+
+  const stageCounts = {}
+  for (const r of countsRes.data || []) stageCounts[r.stage_id] = (stageCounts[r.stage_id] || 0) + 1
+
+  const stagesByPipeline = {}
+  for (const s of stagesRes.data || []) {
+    if (!stagesByPipeline[s.pipeline_id]) stagesByPipeline[s.pipeline_id] = []
+    stagesByPipeline[s.pipeline_id].push({ ...s, contactCount: stageCounts[s.id] || 0 })
+  }
+
+  return (pipelinesRes.data || []).map(p => ({ ...p, stages: stagesByPipeline[p.id] || [] }))
+}
+
+export async function createPipeline(name, stageNames) {
+  blockIfDemo()
+  const { data: pipeline, error: pErr } = await supabase
+    .from('pipelines')
+    .insert({ name })
+    .select()
+    .single()
+  if (pErr) throw pErr
+
+  const stageRows = stageNames.map((name, i) => ({ pipeline_id: pipeline.id, name, position: i }))
+  const { data: stages, error: sErr } = await supabase
+    .from('pipeline_stages')
+    .insert(stageRows)
+    .select()
+  if (sErr) throw sErr
+
+  return { ...pipeline, stages: stages.map(s => ({ ...s, contactCount: 0 })) }
+}
+
+export async function renamePipeline(id, name) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('pipelines')
+    .update({ name })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePipeline(id) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('pipelines')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function addPipelineStage(pipelineId, name, position) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('pipeline_stages')
+    .insert({ pipeline_id: pipelineId, name, position })
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, contactCount: 0 }
+}
+
+export async function renamePipelineStage(id, name) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('pipeline_stages')
+    .update({ name })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function reorderPipelineStages(updates) {
+  blockIfDemo()
+  await Promise.all(updates.map(({ id, position }) =>
+    supabase.from('pipeline_stages').update({ position }).eq('id', id)
+  ))
+}
+
+export async function deletePipelineStage(id) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('pipeline_stages')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function getPipelineBoard(pipelineId) {
+  if (isDemo()) return demo.demoPipelineBoard(pipelineId)
+  const { data, error } = await supabase
+    .from('contact_pipeline_stages')
+    .select('id, contact_id, stage_id, contacts(id, name, email, phone, source, interest, service_type, avatar, avatar_color)')
+    .eq('pipeline_id', pipelineId)
+  if (error) throw error
+  return (data || []).filter(r => r.contacts).map(r => ({ assignmentId: r.id, stageId: r.stage_id, ...r.contacts }))
+}
+
+export async function assignContactToPipeline(contactId, pipelineId, stageId) {
+  blockIfDemo()
+  const { data, error } = await supabase
+    .from('contact_pipeline_stages')
+    .upsert({ contact_id: contactId, pipeline_id: pipelineId, stage_id: stageId, updated_at: new Date().toISOString() }, { onConflict: 'contact_id,pipeline_id' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function removeContactFromPipeline(contactId, pipelineId) {
+  blockIfDemo()
+  const { error } = await supabase
+    .from('contact_pipeline_stages')
+    .delete()
+    .eq('contact_id', contactId)
+    .eq('pipeline_id', pipelineId)
+  if (error) throw error
+}
+
+export async function getContactPipelineAssignments(contactId) {
+  if (isDemo()) return demo.demoContactPipelineAssignments(contactId)
+  const { data, error } = await supabase
+    .from('contact_pipeline_stages')
+    .select('pipeline_id, stage_id, pipelines(name), pipeline_stages(name)')
+    .eq('contact_id', contactId)
+  if (error) throw error
+  return (data || []).map(r => ({
+    pipelineId: r.pipeline_id,
+    pipelineName: r.pipelines?.name || 'Pipeline',
+    stageId: r.stage_id,
+    stageName: r.pipeline_stages?.name || 'Stage',
+  }))
 }
 
 // ─── REVIEW CAMPAIGNS ────────────────────────────────────────────────────────
