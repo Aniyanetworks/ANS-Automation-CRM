@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart, Upload, Download, FolderPlus, Send, Tag, Star, Layers } from 'lucide-react'
+import { Search, Filter, X, Phone, Mail, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Heart, Upload, Download, FolderPlus, Send, Tag, Star, Layers, ShieldCheck, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import {
   getContacts, updateContact, createContact, createContacts, deleteContact, deleteContacts,
   getNurtureCampaigns, createNurtureClients,
@@ -1171,6 +1171,119 @@ function ReviewEnrollModal({ contacts, onClose, onDone }) {
 }
 
 
+const N8N_VERIFY_PHONES = 'https://n8n.srv1300653.hstgr.cloud/webhook/verify-phones'
+
+function PhoneVerifyModal({ loading, results, skipped, onClose }) {
+  const valid   = results?.filter(r => r.valid)   || []
+  const invalid = results?.filter(r => !r.valid)  || []
+
+  const lineTypeBadge = (t) => {
+    const map = {
+      mobile:        'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+      landline:      'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+      voip:          'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+      nonfixedvoip:  'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+    }
+    return map[(t||'').toLowerCase()] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={20} className="text-emerald-500" />
+            <h3 className="font-semibold text-slate-900 dark:text-white">Phone Verification</h3>
+          </div>
+          {!loading && (
+            <button onClick={onClose} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+              <X size={18} className="text-slate-500 dark:text-slate-400" />
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 size={32} className="animate-spin text-emerald-500" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">Verifying phone numbers via NumLookup...</p>
+          </div>
+        ) : (
+          <div className="flex flex-col max-h-[70vh]">
+            {/* Summary bar */}
+            <div className="flex items-center gap-4 px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-500" />
+                <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{valid.length} Valid</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <XCircle size={16} className="text-red-500" />
+                <span className="text-sm font-semibold text-red-700 dark:text-red-400">{invalid.length} Invalid</span>
+              </div>
+              {skipped > 0 && (
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={16} className="text-amber-500" />
+                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">{skipped} Skipped (no phone)</span>
+                </div>
+              )}
+              <span className="ml-auto text-xs text-slate-400">{(results||[]).length} checked</span>
+            </div>
+
+            {/* Results table */}
+            <div className="overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-700">
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Phone</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Line Type</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Carrier</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Can SMS</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Location</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(results || []).map((r, i) => (
+                    <tr key={r.id || i} className={`border-b border-slate-50 dark:border-slate-800 ${r.valid ? '' : 'bg-red-50/50 dark:bg-red-900/10'}`}>
+                      <td className="px-6 py-3">
+                        {r.valid
+                          ? <CheckCircle2 size={16} className="text-emerald-500" />
+                          : <XCircle size={16} className="text-red-500" />}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200">{r.name}</td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 font-mono text-xs">{r.phone}</td>
+                      <td className="px-4 py-3">
+                        {r.line_type ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${lineTypeBadge(r.line_type)}`}>
+                            {r.line_type}
+                          </span>
+                        ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{r.carrier || '—'}</td>
+                      <td className="px-4 py-3">
+                        {r.can_sms === 'YES'
+                          ? <span className="text-emerald-600 dark:text-emerald-400 font-medium text-xs">YES</span>
+                          : <span className="text-slate-400 text-xs">NO</span>}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">{r.location || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+              <button onClick={onClose} className="px-5 py-2 bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Contacts() {
   const notify = useNotify()
   const { isDemo } = useAuth()
@@ -1197,6 +1310,11 @@ export default function Contacts() {
   const [enrollmentMap, setEnrollmentMap] = useState({}) // { [email_lower]: campaignName }
   const [pipelines, setPipelines] = useState([])
   const [pipelineBulkOpen, setPipelineBulkOpen] = useState(false)
+  const [phoneVerifyOpen, setPhoneVerifyOpen] = useState(false)
+  const [phoneVerifyLoading, setPhoneVerifyLoading] = useState(false)
+  const [phoneVerifyResults, setPhoneVerifyResults] = useState(null)
+  const [phoneVerifySkipped, setPhoneVerifySkipped] = useState(0)
+  const [verifiedPhones, setVerifiedPhones] = useState({}) // { [contactId]: result }
   // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
   const [groups, setGroups] = useState([])
   const [memberships, setMemberships] = useState([]) // [{ group_id, contact_id }]
@@ -1275,6 +1393,43 @@ export default function Contacts() {
   function handleSave(updated) {
     setContacts(prev => prev.map(c => c.id === updated.id ? updated : c))
     setSelected(updated)
+  }
+
+  async function handleVerifyPhones() {
+    const sel = contacts.filter(c => selectedIds.has(c.id))
+    const withPhone = sel.filter(c => c.phone)
+    const skipped = sel.length - withPhone.length
+    if (!withPhone.length) {
+      notify('None of the selected contacts have a phone number', 'error')
+      return
+    }
+    setPhoneVerifySkipped(skipped)
+    setPhoneVerifyResults(null)
+    setPhoneVerifyLoading(true)
+    setPhoneVerifyOpen(true)
+    try {
+      const resp = await fetch(N8N_VERIFY_PHONES, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contacts: withPhone.map(c => ({ id: c.id, name: c.name, phone: c.phone }))
+        })
+      })
+      if (!resp.ok) throw new Error(`Verification request failed (${resp.status})`)
+      const data = await resp.json()
+      const results = data.results || []
+      setPhoneVerifyResults(results)
+      setVerifiedPhones(prev => {
+        const next = { ...prev }
+        results.forEach(r => { next[r.id] = r })
+        return next
+      })
+    } catch (err) {
+      notify('Phone verification failed: ' + err.message, 'error')
+      setPhoneVerifyOpen(false)
+    } finally {
+      setPhoneVerifyLoading(false)
+    }
   }
 
   async function executeConfirmedDelete() {
@@ -1397,6 +1552,14 @@ export default function Contacts() {
         onConfirm={executeConfirmedDelete}
         onCancel={() => setConfirmPending(null)}
       />
+      {phoneVerifyOpen && (
+        <PhoneVerifyModal
+          loading={phoneVerifyLoading}
+          results={phoneVerifyResults}
+          skipped={phoneVerifySkipped}
+          onClose={() => setPhoneVerifyOpen(false)}
+        />
+      )}
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
@@ -1462,6 +1625,14 @@ export default function Contacts() {
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
               >
                 <Layers size={14} /> Add to Pipeline
+              </button>
+            )}
+            {!isDemo && (
+              <button
+                onClick={handleVerifyPhones}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+              >
+                <ShieldCheck size={14} /> Verify Phone
               </button>
             )}
             {!isDemo && (
@@ -1600,7 +1771,24 @@ export default function Contacts() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 hidden sm:table-cell">
-                      <div className="text-sm text-slate-700 dark:text-slate-300">{c.phone || <span className="text-slate-300 dark:text-slate-600">—</span>}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-slate-700 dark:text-slate-300">{c.phone || <span className="text-slate-300 dark:text-slate-600">—</span>}</span>
+                        {verifiedPhones[c.id] && (
+                          verifiedPhones[c.id].valid
+                            ? <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                                verifiedPhones[c.id].line_category === 'mobile'   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                                verifiedPhones[c.id].line_category === 'landline' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                                                    'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                              }`}>
+                                <CheckCircle2 size={9} />
+                                {verifiedPhones[c.id].line_category === 'mobile' ? 'Mobile' :
+                                 verifiedPhones[c.id].line_category === 'landline' ? 'Landline' : 'VoIP'}
+                              </span>
+                            : <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                                <XCircle size={9} /> Invalid
+                              </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-400">{c.email || <span className="text-slate-300 dark:text-slate-600">—</span>}</div>
                     </td>
                     <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-300 hidden md:table-cell">{c.service_type}</td>

@@ -1,0 +1,196 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "verify-phones",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "a1b2c3d4-0001-0001-0001-000000000001",
+      "name": "Webhook - Verify Phones",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [560, 300],
+      "webhookId": "a1b2c3d4-beef-cafe-dead-000000000001"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Split the contacts array from the request body into individual items.\n// Also pass the apiKey forward on each item so the HTTP node can use it.\nconst contacts = $json.body.contacts || [];\nconst apiKey = $json.body.apiKey || 'num_live_DyA6G1oLqzFPWIGjhpLBe5BfIh9zqvi8DXwUsphU';\n\n// Return one item per contact\nreturn contacts.map(c => ({\n  json: {\n    id: c.id || '',\n    name: c.name || '',\n    phone: (c.phone || '').replace(/[^0-9+]/g, ''),\n    _apiKey: apiKey\n  }\n}));"
+      },
+      "id": "a1b2c3d4-0002-0002-0002-000000000002",
+      "name": "Split Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [780, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.numlookupapi.com/v1/validate/{{ encodeURIComponent($json.phone) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $json._apiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          },
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "NumLookup API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Merge the NumLookup response with the original contact fields.\n// $('Split Contacts').item gives the paired input item (same index).\nconst contact = $('Split Contacts').item.json;\nconst lookup = $json;\n\nconst lineType = String(lookup.line_type || '').toLowerCase();\n\nlet lineCategory = 'unknown';\nlet canSMS = false;\nif (lineType === 'mobile') { lineCategory = 'mobile'; canSMS = true; }\nelse if (lineType === 'landline') { lineCategory = 'landline'; }\nelse if (lineType === 'voip' || lineType === 'nonfixedvoip') { lineCategory = 'voip'; }\n\nlet priority = 'normal';\nif (lineType === 'mobile') priority = 'high';\nif (lineType === 'unknown' || !lookup.valid) priority = 'low';\n\nreturn {\n  json: {\n    id: contact.id,\n    name: contact.name,\n    phone: contact.phone,\n    valid: lookup.valid === true,\n    international_format: lookup.international_format || contact.phone,\n    country_code: lookup.country_code || '',\n    location: lookup.location || '',\n    carrier: lookup.carrier || '',\n    line_type: lookup.line_type || '',\n    line_category: lineCategory,\n    can_sms: canSMS ? 'YES' : 'NO',\n    priority\n  }\n};"
+      },
+      "id": "a1b2c3d4-0004-0004-0004-000000000004",
+      "name": "Enrich Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1220, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "results",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-0005-0005-000000000005",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Shape the final response the CRM frontend expects:\n// { results: [...], summary: { total, valid, invalid, mobile, landline, voip } }\nconst results = $json.results || [];\n\nconst valid   = results.filter(r => r.valid).length;\nconst invalid = results.length - valid;\nconst mobile  = results.filter(r => r.line_category === 'mobile').length;\nconst landline = results.filter(r => r.line_category === 'landline').length;\nconst voip    = results.filter(r => r.line_category === 'voip').length;\n\nreturn [{\n  json: {\n    results,\n    summary: {\n      total: results.length,\n      valid,\n      invalid,\n      mobile,\n      landline,\n      voip\n    }\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0006-0006-0006-000000000006",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a1b2c3d4-0007-0007-0007-000000000007",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1880, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Verify Phones": {
+      "main": [
+        [
+          {
+            "node": "Split Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Contacts": {
+      "main": [
+        [
+          {
+            "node": "NumLookup API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NumLookup API": {
+      "main": [
+        [
+          {
+            "node": "Enrich Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5ed296676961c5ed41c639e1683078855c8f50e4c5aa1466963b063405345b3e"
+  }
+}

@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, MessageSquare, CalendarDays,
   Activity, Zap, Layers, Settings, Bot, X, LogOut, Mail, Star, BarChart3,
-  PanelLeftClose, PanelLeftOpen, Inbox,
+  PanelLeftClose, PanelLeftOpen, Inbox, Crown,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useInbox } from '../../context/InboxContext'
@@ -17,6 +17,7 @@ const navItems = [
   { to: '/email-report', icon: BarChart3, label: 'Email Report' },
   { to: '/review-campaigns', icon: Star, label: 'Review Campaigns' },
   { to: '/pipelines', icon: Layers, label: 'Pipelines' },
+  { to: '/membership', icon: Crown, label: 'Membership' },
   { to: '/workflows', icon: Activity, label: 'Workflow Logs' },
   { to: '/automations', icon: Zap, label: 'Automations' },
 ]

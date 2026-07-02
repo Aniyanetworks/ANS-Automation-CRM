@@ -295,13 +295,62 @@ export async function getFollowUpExecutions() {
 }
 
 export async function getFollowUpSequenceContacts() {
-  if (isDemo()) return demo.demoContacts.filter(c => c.current_step && c.current_step !== 'START')
+  if (isDemo()) return demo.demoContacts.filter(c => ['New Lead','Follow-Up'].includes(c.lead_status))
   const { data, error } = await supabase
     .from('contacts')
-    .select('id, name, phone, email, source, current_step, last_action_type, last_message_sent, last_action_date, lead_status, customer_replied, unsubscribe, avatar, avatar_color')
-    .not('current_step', 'is', null)
-    .neq('current_step', 'START')
-    .order('last_action_date', { ascending: false })
+    .select('*')
+    .in('lead_status', ['New Lead', 'Follow-Up'])
+    .neq('customer_replied', 'Yes')
+    .neq('unsubscribe', 'Yes')
+    .order('last_followup_date', { ascending: false, nullsFirst: false })
+  if (error) throw error
+  return data
+}
+
+export async function getFollowupSettings() {
+  if (isDemo()) return []
+  const { data, error } = await supabase
+    .from('followup_settings')
+    .select('*')
+    .order('step_number', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function saveFollowupSettings(steps) {
+  blockIfDemo()
+  const { error: delError } = await supabase
+    .from('followup_settings')
+    .delete()
+    .gte('step_number', 1)
+  if (delError) throw delError
+  if (steps.length === 0) return []
+  const rows = steps.map((s, i) => ({
+    step_number:    i + 1,
+    label:          s.label || `Follow-up ${i + 1}`,
+    wait_hours:     Number(s.wait_hours) || 24,
+    sms_enabled:    s.sms_enabled ?? true,
+    sms_template:   s.sms_template || '',
+    email_enabled:  s.email_enabled ?? false,
+    email_subject:  s.email_subject || '',
+    email_template: s.email_template || '',
+    is_active:      s.is_active ?? true,
+  }))
+  const { data, error } = await supabase
+    .from('followup_settings')
+    .insert(rows)
+    .select()
+  if (error) throw error
+  return data
+}
+
+export async function getFollowupLogs({ limit = 100, offset = 0 } = {}) {
+  if (isDemo()) return []
+  const { data, error } = await supabase
+    .from('followup_logs')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .range(offset, offset + limit - 1)
   if (error) throw error
   return data
 }

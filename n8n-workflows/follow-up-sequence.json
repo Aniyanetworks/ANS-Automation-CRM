@@ -1,0 +1,247 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours" }]
+        }
+      },
+      "id": "84c97254-d87e-420b-a43b-8fe8f2ce8575",
+      "name": "Check Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [-2800, 848]
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/followup_settings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "is_active", "value": "eq.true" },
+            { "name": "order",     "value": "step_number.asc" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-aaaa-aaaa-aaaa-000000000001",
+      "name": "Get Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-2576, 848],
+      "credentials": {
+        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "lead_status",      "value": "in.(New Lead,Follow-Up)" },
+            { "name": "customer_replied", "value": "not.eq.Yes" },
+            { "name": "unsubscribe",      "value": "not.eq.Yes" },
+            { "name": "select",           "value": "*" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "22222222-bbbb-bbbb-bbbb-000000000002",
+      "name": "Get Eligible Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-2352, 848],
+      "credentials": {
+        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// TESTING MODE: shouldSend is always true — time checks are skipped.\n// Remove the TESTING MODE comment and restore the hoursSince check for production.\n\nconst now = new Date();\nconst BOOKING_LINK = 'https://cal.com/manam';\n\nlet settings = [];\ntry {\n  const raw = $('Get Settings').all()[0].json;\n  settings = Array.isArray(raw) ? raw.filter(s => s.is_active) : [];\n} catch(e) {}\n\nlet contacts = [];\ntry {\n  const raw = $input.first().json;\n  contacts = Array.isArray(raw) ? raw : [];\n} catch(e) {}\n\nif (contacts.length === 0 || settings.length === 0) {\n  return [{ json: {\n    shouldSend: false, _dbg_reason: contacts.length === 0 ? 'no_contacts' : 'no_settings'\n  }}];\n}\n\nfunction render(template, vars) {\n  if (!template) return '';\n  return String(template)\n    .replace(/\\{\\{name\\}\\}/g,         vars.name)\n    .replace(/\\{\\{service\\}\\}/g,      vars.service)\n    .replace(/\\{\\{booking_link\\}\\}/g, vars.booking_link);\n}\n\nconst results = [];\n\nfor (const d of contacts) {\n  try {\n    const currentStep = typeof d.followup_step === 'number' ? d.followup_step : 0;\n    const nextStepNum  = currentStep + 1;\n    const nextConfig   = settings.find(s => s.step_number === nextStepNum);\n\n    if (!nextConfig) {\n      // All steps completed for this contact\n      continue;\n    }\n\n    const refStr     = d.last_followup_date || d.last_action_date || d.created_at;\n    const refDate    = refStr ? new Date(refStr) : new Date('2000-01-01');\n    const hoursSince = (now - refDate) / 3_600_000;\n\n    // TESTING MODE: skip time check — always send\n    // PRODUCTION: uncomment the block below and remove this line\n    // if (hoursSince < nextConfig.wait_hours) { results.push({ json: { id: d.id, name: d.name, shouldSend: false, _dbg_reason: 'not_due_yet', _dbg_waitHours: nextConfig.wait_hours, _dbg_hoursSince: Math.round(hoursSince * 100) / 100 }}); continue; }\n\n    const firstName = d.name ? d.name.split(' ')[0] : 'there';\n    const service   = d.message || d.service_type || d.interest || 'your request';\n    const vars      = { name: firstName, service, booking_link: BOOKING_LINK };\n\n    const hasSMS   = nextConfig.sms_enabled  && !!(d.phone && String(d.phone).trim());\n    const hasEmail = nextConfig.email_enabled && !!(d.email && String(d.email).trim());\n\n    results.push({ json: {\n      ...d,\n      shouldSend:   true,\n      nextStepNum,\n      stepLabel:    nextConfig.label,\n      smsPhone:     hasSMS  ? String(d.phone).trim() : '',\n      emailTo:      hasEmail ? String(d.email).trim() : '',\n      smsText:      hasSMS  ? render(nextConfig.sms_template,   vars) : '',\n      emailSubject: hasEmail ? render(nextConfig.email_subject,  vars) : '',\n      emailText:    hasEmail ? render(nextConfig.email_template, vars) : '',\n      nowISO:       now.toISOString(),\n      _dbg_hoursSince: Math.round(hoursSince * 100) / 100\n    }});\n  } catch(e) {\n    results.push({ json: {\n      id: d.id || '', name: d.name || '',\n      shouldSend: false, _dbg_error: String(e)\n    }});\n  }\n}\n\nreturn results.length > 0\n  ? results\n  : [{ json: { shouldSend: false, _dbg_reason: 'no_actions_due' } }];"
+      },
+      "id": "33333333-cccc-cccc-cccc-000000000003",
+      "name": "Process Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-2128, 848],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-0001-0001-0001-0001-000000000001",
+              "leftValue": "={{ $json.nextStepNum }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "44444444-dddd-dddd-dddd-000000000004",
+      "name": "Is Action Due?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [-1904, 848]
+    },
+    {
+      "parameters": {
+        "from": "+13653603797",
+        "to": "={{ $json.smsPhone }}",
+        "message": "={{ $json.smsText }}",
+        "options": {}
+      },
+      "id": "55555555-eeee-eeee-eeee-000000000005",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [-1680, 848],
+      "credentials": {
+        "twilioApi": { "id": "iq0iE8ReZovuE4JX", "name": "MP 12184380445 Twilio account" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.emailTo }}",
+        "subject": "={{ $json.emailSubject }}",
+        "emailType": "text",
+        "message": "={{ $json.emailText }}",
+        "options": {}
+      },
+      "id": "66666666-ffff-ffff-ffff-000000000006",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [-1456, 848],
+      "webhookId": "2a6d5861-859b-4b30-b8ff-0fc09acf69e0",
+      "credentials": {
+        "gmailOAuth2": { "id": "5m7tLE66Mg5tj0xf", "name": "Gmail account" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/contacts?id=eq.{{ $('Process Contacts').item.json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "followup_step",       "value": "={{ $('Process Contacts').item.json.nextStepNum }}" },
+            { "name": "last_followup_date",  "value": "={{ $('Process Contacts').item.json.nowISO }}" },
+            { "name": "last_message_sent",   "value": "={{ $('Process Contacts').item.json.smsText || $('Process Contacts').item.json.emailText }}" },
+            { "name": "last_action_type",    "value": "={{ $('Process Contacts').item.json.smsPhone ? 'SMS' : 'EMAIL' }}" },
+            { "name": "lead_status",         "value": "Follow-Up" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "77777777-aaaa-bbbb-cccc-000000000007",
+      "name": "Update Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1232, 848],
+      "credentials": {
+        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/followup_logs",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer sb_publishable_4uuJGzwYYU8mwoMoEyXe2g_xSwCLuoW" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "contact_id",    "value": "={{ $('Process Contacts').item.json.id }}" },
+            { "name": "contact_name",  "value": "={{ $('Process Contacts').item.json.name }}" },
+            { "name": "phone",         "value": "={{ $('Process Contacts').item.json.smsPhone || $('Process Contacts').item.json.phone || '' }}" },
+            { "name": "email",         "value": "={{ $('Process Contacts').item.json.emailTo || $('Process Contacts').item.json.email || '' }}" },
+            { "name": "step_number",   "value": "={{ $('Process Contacts').item.json.nextStepNum }}" },
+            { "name": "step_label",    "value": "={{ $('Process Contacts').item.json.stepLabel }}" },
+            { "name": "sms_text",      "value": "={{ $('Process Contacts').item.json.smsText || '' }}" },
+            { "name": "email_subject", "value": "={{ $('Process Contacts').item.json.emailSubject || '' }}" },
+            { "name": "email_text",    "value": "={{ $('Process Contacts').item.json.emailText || '' }}" },
+            { "name": "status",        "value": "sent" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "88888888-bbbb-cccc-dddd-000000000008",
+      "name": "Log to followup_logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1008, 848],
+      "credentials": {
+        "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Check Every Hour":    { "main": [[{ "node": "Get Settings",         "type": "main", "index": 0 }]] },
+    "Get Settings":        { "main": [[{ "node": "Get Eligible Contacts", "type": "main", "index": 0 }]] },
+    "Get Eligible Contacts": { "main": [[{ "node": "Process Contacts",   "type": "main", "index": 0 }]] },
+    "Process Contacts":    { "main": [[{ "node": "Is Action Due?",        "type": "main", "index": 0 }]] },
+    "Is Action Due?":      { "main": [[{ "node": "Send SMS",              "type": "main", "index": 0 }]] },
+    "Send SMS":            { "main": [[{ "node": "Send Email",            "type": "main", "index": 0 }]] },
+    "Send Email":          { "main": [[{ "node": "Update Contact",        "type": "main", "index": 0 }]] },
+    "Update Contact":      { "main": [[{ "node": "Log to followup_logs",  "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "5ed296676961c5ed41c639e1683078855c8f50e4c5aa1466963b063405345b3e"
+  }
+}
