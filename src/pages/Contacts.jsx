@@ -1314,7 +1314,6 @@ export default function Contacts() {
   const [phoneVerifyLoading, setPhoneVerifyLoading] = useState(false)
   const [phoneVerifyResults, setPhoneVerifyResults] = useState(null)
   const [phoneVerifySkipped, setPhoneVerifySkipped] = useState(0)
-  const [verifiedPhones, setVerifiedPhones] = useState({}) // { [contactId]: result }
   // confirmPending: null | { type: 'single', contact } | { type: 'bulk' }
   const [groups, setGroups] = useState([])
   const [memberships, setMemberships] = useState([]) // [{ group_id, contact_id }]
@@ -1419,11 +1418,33 @@ export default function Contacts() {
       const data = await resp.json()
       const results = data.results || []
       setPhoneVerifyResults(results)
-      setVerifiedPhones(prev => {
-        const next = { ...prev }
-        results.forEach(r => { next[r.id] = r })
-        return next
-      })
+
+      // Persist each result to the DB and update local state
+      const now = new Date().toISOString()
+      await Promise.allSettled(
+        results.map(r =>
+          updateContact(r.id, {
+            phone_verified:    r.valid === true,
+            phone_line_type:   r.line_type    || null,
+            phone_carrier:     r.carrier      || null,
+            phone_can_sms:     r.can_sms === 'YES' || r.line_category === 'mobile',
+            phone_verified_at: now,
+          })
+        )
+      )
+      // Patch local contacts state so badge shows immediately without refetch
+      setContacts(prev => prev.map(c => {
+        const r = results.find(x => x.id === c.id)
+        if (!r) return c
+        return {
+          ...c,
+          phone_verified:    r.valid === true,
+          phone_line_type:   r.line_type    || null,
+          phone_carrier:     r.carrier      || null,
+          phone_can_sms:     r.can_sms === 'YES' || r.line_category === 'mobile',
+          phone_verified_at: now,
+        }
+      }))
     } catch (err) {
       notify('Phone verification failed: ' + err.message, 'error')
       setPhoneVerifyOpen(false)
@@ -1773,20 +1794,21 @@ export default function Contacts() {
                     <td className="px-4 py-3.5 hidden sm:table-cell">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm text-slate-700 dark:text-slate-300">{c.phone || <span className="text-slate-300 dark:text-slate-600">—</span>}</span>
-                        {verifiedPhones[c.id] && (
-                          verifiedPhones[c.id].valid
-                            ? <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                                verifiedPhones[c.id].line_category === 'mobile'   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
-                                verifiedPhones[c.id].line_category === 'landline' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                                                                                    'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-                              }`}>
-                                <CheckCircle2 size={9} />
-                                {verifiedPhones[c.id].line_category === 'mobile' ? 'Mobile' :
-                                 verifiedPhones[c.id].line_category === 'landline' ? 'Landline' : 'VoIP'}
-                              </span>
-                            : <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                                <XCircle size={9} /> Invalid
-                              </span>
+                        {c.phone_verified === true && (
+                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                            c.phone_line_type === 'mobile'   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                            c.phone_line_type === 'landline' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                               'bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                          }`}>
+                            <CheckCircle2 size={9} />
+                            {c.phone_line_type === 'mobile' ? 'Mobile' :
+                             c.phone_line_type === 'landline' ? 'Landline' : 'VoIP'}
+                          </span>
+                        )}
+                        {c.phone_verified === false && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                            <XCircle size={9} /> Invalid
+                          </span>
                         )}
                       </div>
                       <div className="text-xs text-slate-400">{c.email || <span className="text-slate-300 dark:text-slate-600">—</span>}</div>
