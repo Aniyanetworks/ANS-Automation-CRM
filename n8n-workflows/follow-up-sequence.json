@@ -77,7 +77,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// TESTING MODE: time check is disabled — every contact with a next step gets sent.\n// For production: uncomment the hoursSince block and restore real wait times in Settings.\n\nconst now = new Date();\nconst BOOKING_LINK = 'https://cal.com/manam';\n\nlet settings = [];\ntry {\n  const allSettings = $('Get Settings').all();\n  const firstSetting = allSettings[0].json;\n  const settingsArr = Array.isArray(firstSetting) ? firstSetting : allSettings.map(i => i.json);\n  settings = settingsArr.filter(s => s.is_active);\n} catch(e) {}\n\nlet contacts = [];\ntry {\n  const allItems = $input.all();\n  const firstJson = allItems[0].json;\n  contacts = Array.isArray(firstJson) ? firstJson : allItems.map(i => i.json);\n} catch(e) {}\n\nif (contacts.length === 0 || settings.length === 0) {\n  return [{ json: { shouldSend: false, _dbg_reason: contacts.length === 0 ? 'no_contacts' : 'no_settings' } }];\n}\n\nfunction render(template, vars) {\n  if (!template) return '';\n  return String(template)\n    .replace(/\\{\\{name\\}\\}/g,         vars.name)\n    .replace(/\\{\\{service\\}\\}/g,      vars.service)\n    .replace(/\\{\\{booking_link\\}\\}/g, vars.booking_link);\n}\n\nconst results = [];\n\nfor (const d of contacts) {\n  try {\n    const currentStep = typeof d.followup_step === 'number' ? d.followup_step : 0;\n    const nextStepNum = currentStep + 1;\n    const nextConfig  = settings.find(s => s.step_number === nextStepNum);\n\n    if (!nextConfig) continue; // all steps done for this contact\n\n    const refStr     = d.last_followup_date || d.last_action_date || d.created_at;\n    const refDate    = refStr ? new Date(refStr) : new Date('2000-01-01');\n    const hoursSince = (now - refDate) / 3_600_000;\n\n    // TESTING MODE: always send — no time check\n    // PRODUCTION: uncomment below\n    // if (hoursSince < nextConfig.wait_hours) continue;\n\n    const firstName = d.name ? d.name.split(' ')[0] : 'there';\n    const service   = d.message || d.service_type || d.interest || 'your request';\n    const vars      = { name: firstName, service, booking_link: BOOKING_LINK };\n\n    const hasSMS   = nextConfig.sms_enabled   && !!(d.phone  && String(d.phone).trim());\n    const hasEmail = nextConfig.email_enabled  && !!(d.email  && String(d.email).trim());\n\n    results.push({ json: {\n      ...d,\n      shouldSend:   true,\n      nextStepNum,\n      stepLabel:    nextConfig.label,\n      smsPhone:     hasSMS  ? String(d.phone).trim()  : '',\n      emailTo:      hasEmail ? String(d.email).trim() : '',\n      smsText:      hasSMS  ? render(nextConfig.sms_template,  vars) : '',\n      emailSubject: hasEmail ? render(nextConfig.email_subject, vars) : '',\n      emailText:    hasEmail ? render(nextConfig.email_template, vars) : '',\n      nowISO:       now.toISOString(),\n      _dbg_hoursSince: Math.round(hoursSince * 100) / 100\n    }});\n  } catch(e) {\n    results.push({ json: { id: d.id || '', name: d.name || '', shouldSend: false, _dbg_error: String(e) } });\n  }\n}\n\nreturn results.length > 0\n  ? results\n  : [{ json: { shouldSend: false, _dbg_reason: 'no_actions_due' } }];"
+        "jsCode": "// TESTING MODE: time check disabled — every eligible contact gets sent.\n// PRODUCTION: uncomment the hoursSince block below.\n\nconst now = new Date();\nconst BOOKING_LINK = 'https://cal.com/manam';\n\nlet settings = [];\ntry {\n  const allSettings = $('Get Settings').all();\n  const firstSetting = allSettings[0].json;\n  const settingsArr = Array.isArray(firstSetting) ? firstSetting : allSettings.map(i => i.json);\n  settings = settingsArr.filter(s => s.is_active);\n} catch(e) {}\n\nlet contacts = [];\ntry {\n  const allItems = $input.all();\n  const firstJson = allItems[0].json;\n  contacts = Array.isArray(firstJson) ? firstJson : allItems.map(i => i.json);\n} catch(e) {}\n\nif (contacts.length === 0 || settings.length === 0) {\n  return [{ json: { shouldSend: false, _dbg_reason: contacts.length === 0 ? 'no_contacts' : 'no_settings' } }];\n}\n\nfunction render(template, vars) {\n  if (!template) return '';\n  return String(template)\n    .replace(/\\{\\{name\\}\\}/g,         vars.name)\n    .replace(/\\{\\{service\\}\\}/g,      vars.service)\n    .replace(/\\{\\{booking_link\\}\\}/g, vars.booking_link);\n}\n\nconst results = [];\n\nfor (const d of contacts) {\n  try {\n    const currentStep = typeof d.followup_step === 'number' ? d.followup_step : 0;\n    const nextStepNum = currentStep + 1;\n    const nextConfig  = settings.find(s => s.step_number === nextStepNum);\n\n    if (!nextConfig) continue;\n\n    const refStr     = d.last_followup_date || d.last_action_date || d.created_at;\n    const refDate    = refStr ? new Date(refStr) : new Date('2000-01-01');\n    const hoursSince = (now - refDate) / 3_600_000;\n\n    // TESTING MODE: always send\n    // PRODUCTION: uncomment the line below\n    // if (hoursSince < nextConfig.wait_hours) continue;\n\n    const firstName = d.name ? d.name.split(' ')[0] : 'there';\n    const service   = d.message || d.service_type || d.interest || 'your request';\n    const vars      = { name: firstName, service, booking_link: BOOKING_LINK };\n\n    const hasSMS = nextConfig.sms_enabled && !!(d.phone && String(d.phone).trim());\n\n    results.push({ json: {\n      ...d,\n      shouldSend:      true,\n      nextStepNum,\n      stepLabel:       nextConfig.label,\n      smsPhone:        hasSMS ? String(d.phone).trim() : '',\n      smsText:         hasSMS ? render(nextConfig.sms_template, vars) : '',\n      nowISO:          now.toISOString(),\n      _dbg_hoursSince: Math.round(hoursSince * 100) / 100\n    }});\n  } catch(e) {\n    results.push({ json: { id: d.id || '', name: d.name || '', shouldSend: false, _dbg_error: String(e) } });\n  }\n}\n\nreturn results.length > 0\n  ? results\n  : [{ json: { shouldSend: false, _dbg_reason: 'no_actions_due' } }];"
       },
       "id": "279cc5ec-5b82-4607-86fb-e5fff5f197f9",
       "name": "Process Contacts",
@@ -175,55 +175,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "cond-has-email",
-              "leftValue": "={{ $json.emailTo }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEquals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "has-email-node-0001-0001-0001-000000000003",
-      "name": "Has Email?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [1152, 672]
-    },
-    {
-      "parameters": {
-        "sendTo": "={{ $json.emailTo }}",
-        "subject": "={{ $json.emailSubject }}",
-        "emailType": "text",
-        "message": "={{ $json.emailText }}",
-        "options": {}
-      },
-      "id": "6f49af3f-d90a-4843-88ef-d4221c4f62f1",
-      "name": "Send Email",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
-      "position": [1376, 512],
-      "webhookId": "2a6d5861-859b-4b30-b8ff-0fc09acf69e0",
-      "credentials": {
-        "gmailOAuth2": { "id": "5m7tLE66Mg5tj0xf", "name": "Gmail account" }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
         "method": "PATCH",
         "url": "=https://lwzrxstmofibqkxudugc.supabase.co/rest/v1/contacts?id=eq.{{ $('Process Contacts').item.json.id }}",
         "authentication": "predefinedCredentialType",
@@ -241,8 +192,8 @@
           "parameters": [
             { "name": "followup_step",      "value": "={{ $('Process Contacts').item.json.nextStepNum }}" },
             { "name": "last_followup_date", "value": "={{ $('Process Contacts').item.json.nowISO }}" },
-            { "name": "last_message_sent",  "value": "={{ $('Process Contacts').item.json.smsText || $('Process Contacts').item.json.emailText }}" },
-            { "name": "last_action_type",   "value": "={{ $('Process Contacts').item.json.smsPhone ? 'SMS' : 'EMAIL' }}" },
+            { "name": "last_message_sent",  "value": "={{ $('Process Contacts').item.json.smsText }}" },
+            { "name": "last_action_type",   "value": "SMS" },
             { "name": "lead_status",        "value": "Follow-Up" }
           ]
         },
@@ -252,7 +203,7 @@
       "name": "Update Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1600, 672],
+      "position": [1152, 672],
       "credentials": {
         "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
       },
@@ -275,16 +226,14 @@
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
-            { "name": "contact_id",    "value": "={{ $('Process Contacts').item.json.id }}" },
-            { "name": "contact_name",  "value": "={{ $('Process Contacts').item.json.name }}" },
-            { "name": "phone",         "value": "={{ $('Process Contacts').item.json.smsPhone || $('Process Contacts').item.json.phone || '' }}" },
-            { "name": "email",         "value": "={{ $('Process Contacts').item.json.emailTo  || $('Process Contacts').item.json.email  || '' }}" },
-            { "name": "step_number",   "value": "={{ $('Process Contacts').item.json.nextStepNum }}" },
-            { "name": "step_label",    "value": "={{ $('Process Contacts').item.json.stepLabel }}" },
-            { "name": "sms_text",      "value": "={{ $('Process Contacts').item.json.smsText      || '' }}" },
-            { "name": "email_subject", "value": "={{ $('Process Contacts').item.json.emailSubject || '' }}" },
-            { "name": "email_text",    "value": "={{ $('Process Contacts').item.json.emailText    || '' }}" },
-            { "name": "status",        "value": "sent" }
+            { "name": "contact_id",   "value": "={{ $('Process Contacts').item.json.id }}" },
+            { "name": "contact_name", "value": "={{ $('Process Contacts').item.json.name }}" },
+            { "name": "phone",        "value": "={{ $('Process Contacts').item.json.smsPhone || $('Process Contacts').item.json.phone || '' }}" },
+            { "name": "email",        "value": "={{ $('Process Contacts').item.json.email || '' }}" },
+            { "name": "step_number",  "value": "={{ $('Process Contacts').item.json.nextStepNum }}" },
+            { "name": "step_label",   "value": "={{ $('Process Contacts').item.json.stepLabel }}" },
+            { "name": "sms_text",     "value": "={{ $('Process Contacts').item.json.smsText || '' }}" },
+            { "name": "status",       "value": "sent" }
           ]
         },
         "options": {}
@@ -293,7 +242,7 @@
       "name": "Log to followup_logs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1824, 672],
+      "position": [1376, 672],
       "credentials": {
         "httpHeaderAuth": { "id": "SehDVTutwS7XzjTn", "name": "Supabase ANS CRM" }
       },
@@ -324,20 +273,11 @@
     },
     "Has SMS?": {
       "main": [
-        [{ "node": "Send SMS",   "type": "main", "index": 0 }],
-        [{ "node": "Has Email?", "type": "main", "index": 0 }]
-      ]
-    },
-    "Send SMS": {
-      "main": [[{ "node": "Has Email?", "type": "main", "index": 0 }]]
-    },
-    "Has Email?": {
-      "main": [
-        [{ "node": "Send Email",     "type": "main", "index": 0 }],
+        [{ "node": "Send SMS",       "type": "main", "index": 0 }],
         [{ "node": "Update Contact", "type": "main", "index": 0 }]
       ]
     },
-    "Send Email": {
+    "Send SMS": {
       "main": [[{ "node": "Update Contact", "type": "main", "index": 0 }]]
     },
     "Update Contact": {
