@@ -651,7 +651,7 @@ function StepRow({ step, index, onSave, onDelete }) {
         value={form.body}
         onChange={html => setForm(f => ({ ...f, body: html }))}
         placeholder="Write the email… format with the toolbar, and use the chips to drop in lead details."
-        chips={['{{name}}', '{{email}}', '{{service}}']}
+        chips={['{{first_name}}', '{{last_name}}', '{{name}}', '{{email}}', '{{service}}']}
       />
       <div className="flex items-center justify-end">
         <button

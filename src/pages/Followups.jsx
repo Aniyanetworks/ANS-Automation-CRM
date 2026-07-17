@@ -188,7 +188,7 @@ function ContactModal({ contact, settings, onClose }) {
 
 // ─── Settings editor ─────────────────────────────────────────────────────────
 
-const TEMPLATE_VARS = '{{name}}  {{service}}  {{booking_link}}'
+const TEMPLATE_VARS = '{{first_name}}  {{service}}  {{booking_link}}'
 
 function StepCard({ step, idx, onChange, onDelete }) {
   const { value: wVal, unit: wUnit } = hoursToDisplay(step.wait_hours)
